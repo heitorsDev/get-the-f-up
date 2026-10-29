@@ -80,15 +80,34 @@ function verdict(luma, spread, cameraConfig) {
 // One-shot capture whose output and exit code arrive on the same stream.
 // Reading the exit code from the Process `exited` signal races the output
 // collectors and can leave the text empty (parsed as ENODATA).
+//
+// A `@@begin` line is printed first so a reader can drop anything that came
+// before it: the output collector's text is not reliably reset between runs.
+var BEGIN_MARKER = "@@begin"
+var WRAP_SCRIPT = "echo " + BEGIN_MARKER + "; \"$@\" 2>&1; rc=$?; echo \"@@exit=$rc\""
+
+// Any argv, run so that its output and exit code arrive on one stream.
+function wrapCommand(argv, name) {
+  return ["bash", "-c", WRAP_SCRIPT, name || "sleep-mode-step"].concat(argv)
+}
+
 function captureShellCommand(device, settleFrames) {
-  return ["bash", "-c", "\"$@\" 2>&1; echo \"@@exit=$?\"", "sleep-mode-camera"]
-    .concat(captureCommand(device, settleFrames))
+  return wrapCommand(captureCommand(device, settleFrames), "sleep-mode-camera")
+}
+
+// The text after the last @@begin line, with the @@exit marker removed:
+// { output, exit } (exit is null when the marker is missing).
+function unwrap(raw) {
+  var s = String(raw || "")
+  var at = s.lastIndexOf(BEGIN_MARKER + "\n")
+  if (at >= 0) s = s.substring(at + BEGIN_MARKER.length + 1)
+  var m = /@@exit=(\d+)\s*$/.exec(s)
+  return { output: m ? s.substring(0, m.index) : s, exit: m ? parseInt(m[1], 10) : null }
 }
 
 // "...output\n@@exit=0" -> 0; null when the marker is missing.
 function parseWrappedExit(text) {
-  var m = /@@exit=(\d+)\s*$/.exec(String(text || ""))
-  return m ? parseInt(m[1], 10) : null
+  return unwrap(text).exit
 }
 
 function captureCommand(device, settleFrames) {
@@ -192,6 +211,9 @@ if (typeof module !== "undefined" && module.exports) {
     parseLiveLine: parseLiveLine,
     liveErrorCode: liveErrorCode,
     verdict: verdict,
+    BEGIN_MARKER: BEGIN_MARKER,
+    wrapCommand: wrapCommand,
+    unwrap: unwrap,
     captureShellCommand: captureShellCommand,
     parseWrappedExit: parseWrappedExit,
     captureCommand: captureCommand,

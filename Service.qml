@@ -132,13 +132,12 @@ Scope {
   property var _current: null
   property bool _stepStarted: false
   property int _stepExit: 1
-  property int _outMark: 0
 
   Process {
     id: runner
     stdout: StdioCollector {
       id: runnerOut
-      onStreamFinished: root.finishStep(runnerOut.text.substring(root._outMark))
+      onStreamFinished: root.finishStep(runnerOut.text)
     }
 
     onStarted: root._stepStarted = true
@@ -162,7 +161,7 @@ Scope {
   Timer {
     id: stepSettle
     interval: 1500
-    onTriggered: root.finishStep(runnerOut.text.substring(root._outMark))
+    onTriggered: root.finishStep(runnerOut.text)
   }
 
   function enqueue(steps) {
@@ -181,9 +180,7 @@ Scope {
     root._current = root._queue.shift()
     root._stepStarted = false
     root._stepExit = 1
-    root._outMark = runnerOut.text.length
-    runner.command = ["bash", "-c", "\"$@\" 2>&1; rc=$?; echo \"@@exit=$rc\"", "sleep-mode-step"]
-      .concat(root._current.cmd)
+    runner.command = Camera.wrapCommand(root._current.cmd, "sleep-mode-step")
     runner.running = true
   }
 
@@ -192,10 +189,9 @@ Scope {
     var step = root._current
     if (step === null) return
     root._current = null
-    var raw = String(text || "")
-    var marked = Camera.parseWrappedExit(raw)
-    var exitCode = marked === null ? root._stepExit : marked
-    var output = raw.replace(/@@exit=\d+\s*$/, "")
+    var framed = Camera.unwrap(text)
+    var exitCode = framed.exit === null ? root._stepExit : framed.exit
+    var output = framed.output
     if (step.done) {
       try {
         step.done(exitCode, output)
@@ -577,9 +573,8 @@ Scope {
     var done = root._cameraDone
     if (done === null) return
     root._cameraDone = null
-    var raw = String(text || "")
-    var marked = Camera.parseWrappedExit(raw)
-    done(Camera.reading(raw, marked === null ? root._cameraExit : marked))
+    var framed = Camera.unwrap(text)
+    done(Camera.reading(framed.output, framed.exit === null ? root._cameraExit : framed.exit))
   }
 
   // ---- the live preview (settings panel) -------------------------------------

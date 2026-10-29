@@ -175,3 +175,33 @@ test("parseWrappedExit is null without the marker", () => {
   assert.equal(Camera.parseWrappedExit("no marker here"), null)
   assert.equal(Camera.parseWrappedExit("out\n@@exit=124\n"), 124)
 })
+
+// ------------------------------------------------ framing (collector reuse)
+
+test("unwrap drops anything before the last @@begin line", () => {
+  // The collector's text is not reliably reset between runs: an older
+  // command's output can still be in front of the current one.
+  const raw = "old output\n@@exit=1\n@@begin\n@@sinks\n55\talsa\n@@exit=0\n"
+  const framed = Camera.unwrap(raw)
+  assert.equal(framed.output, "@@sinks\n55\talsa\n")
+  assert.equal(framed.exit, 0)
+})
+
+test("unwrap keeps section headers intact when the collector was reset", () => {
+  const framed = Camera.unwrap("@@begin\n@@brightness\nintel_backlight,backlight,12363,51%,24242\n@@exit=0\n")
+  assert.match(framed.output, /^@@brightness\n/)
+  assert.equal(framed.exit, 0)
+})
+
+test("unwrap tolerates a missing marker and missing begin", () => {
+  assert.deepEqual(Camera.unwrap("just text"), { output: "just text", exit: null })
+  assert.equal(Camera.unwrap("").exit, null)
+})
+
+test("wrapCommand runs any argv with the output framed", () => {
+  const cmd = Camera.wrapCommand(["bash", "-c", "echo hi; exit 3", "x"], "sleep-mode-step")
+  const res = spawnSync(cmd[0], cmd.slice(1), { encoding: "utf8" })
+  const framed = Camera.unwrap(res.stdout)
+  assert.equal(framed.output, "hi\n")
+  assert.equal(framed.exit, 3)
+})
