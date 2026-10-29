@@ -174,6 +174,8 @@ Item {
         id: typeChoice
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
+        // Bounded, so it wraps instead of running under the weight stepper.
+        width: root.showWeight ? parent.width - weightSpinner.width - Style.space(12) : parent.width
         theme: root.theme
         options: ["math", "string", "memory", "camera"]
         value: root.type
@@ -210,31 +212,33 @@ Item {
         onEdited: function(value) { root.patch("operators", value) }
       }
 
-      Item {
+      Spinner {
+        id: maxSpinner
         width: parent.width
-        height: Math.max(maxSpinner.implicitHeight, tierChoice.implicitHeight)
+        theme: root.theme
+        label: "max operand"
+        value: root.num("maxOperand", 20)
+        from: 2
+        to: 1000
+        onModified: function(value) { root.patch("maxOperand", value) }
+      }
 
-        Spinner {
-          id: maxSpinner
-          anchors.left: parent.left
-          anchors.verticalCenter: parent.verticalCenter
-          theme: root.theme
-          label: "max operand"
-          value: root.num("maxOperand", 20)
-          from: 2
-          to: 1000
-          onModified: function(value) { root.patch("maxOperand", value) }
-        }
+      Text {
+        width: parent.width
+        textFormat: Text.PlainText
+        text: "difficulty"
+        color: root.theme.foreground
+        font.family: root.theme.fontFamily
+        font.pixelSize: Style.font.bodySmall
+      }
 
-        Choice {
-          id: tierChoice
-          anchors.right: parent.right
-          anchors.verticalCenter: parent.verticalCenter
-          theme: root.theme
-          options: ["easy", "medium", "hard"]
-          value: root.str("tier", "easy")
-          onChosen: function(value) { root.patch("tier", String(value)) }
-        }
+      Choice {
+        id: tierChoice
+        width: parent.width
+        theme: root.theme
+        options: ["easy", "medium", "hard"]
+        value: root.str("tier", "easy")
+        onChosen: function(value) { root.patch("tier", String(value)) }
       }
 
       Spinner {
@@ -250,15 +254,23 @@ Item {
     }
 
     // ---- string parameters ------------------------------------------------
-    Item {
+    Column {
       width: parent.width
-      height: Math.max(charsetChoice.implicitHeight, lengthSpinner.implicitHeight)
+      spacing: Style.space(6)
       visible: root.type === "string"
+
+      Text {
+        width: parent.width
+        textFormat: Text.PlainText
+        text: "characters"
+        color: root.theme.foreground
+        font.family: root.theme.fontFamily
+        font.pixelSize: Style.font.bodySmall
+      }
 
       Choice {
         id: charsetChoice
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
+        width: parent.width
         theme: root.theme
         options: ["alnum", "alpha", "lower", "upper", "digits", "hex", "symbols"]
         value: root.str("charset", "alnum")
@@ -267,8 +279,7 @@ Item {
 
       Spinner {
         id: lengthSpinner
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
+        width: parent.width
         theme: root.theme
         label: "length"
         value: root.num("length", 8)

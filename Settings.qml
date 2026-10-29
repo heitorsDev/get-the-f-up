@@ -385,21 +385,33 @@ Item {
         }
       }
 
+      Text {
+        width: parent.width
+        textFormat: Text.PlainText
+        text: "new preset"
+        color: root.theme.foreground
+        font.family: root.theme.fontFamily
+        font.pixelSize: Style.font.bodySmall
+      }
+
+      // The button is centered on the input itself, not on a label + input
+      // column, so the two line up.
       Item {
         id: newPresetRow
         width: parent.width
-        height: Math.max(newPresetField.implicitHeight, Style.space(30))
+        height: Math.max(newPresetField.implicitHeight, addPresetButton.implicitHeight)
 
-        LabeledField {
+        Field {
           id: newPresetField
           anchors.left: parent.left
           anchors.right: addPresetButton.left
           anchors.rightMargin: Style.space(8)
+          anchors.verticalCenter: parent.verticalCenter
           theme: root.theme
-          label: "new preset"
           placeholder: "late shift"
           text: root.newPresetName
           onEdited: function(value) { root.newPresetName = value }
+          onAccepted: root.addPreset()
         }
 
         Button {
