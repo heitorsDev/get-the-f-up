@@ -613,8 +613,43 @@ Scope {
     root.finishSession(record)
   }
 
+  // Every way out of the mode ends here: silence the alarm, undo every change
+  // through the same idempotent script the crash watchdog uses, stand the
+  // watchdog down, then record and announce the session.
   function finishSession(record) {
-    if (record) root.finished(record)
+    root.stopAlarm()
+    inhibitor.running = false
+    root._record = null
+
+    root.enqueue([
+      { cmd: Lockdown.restoreCommand(root.pluginDir), done: function(code) {
+        if (code !== 0) console.warn("sleep-mode: the restore script exited with " + code)
+      } },
+      // After the restore, so the watchdog is never the only thing standing
+      // between a crash and a dimmed screen.
+      { cmd: Lockdown.watchdogStopCommand() }
+    ])
+
+    if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
+
+    if (record) {
+      var list = History.append(root.historyList, record)
+      root.historyList = list
+      root.run(Lockdown.writeFileCommand(root.historyPath, History.serialize(list)))
+      root.run(Lockdown.toastCommand("Sleep mode", History.summary(record)))
+    }
+    root.finished(record)
+  }
+
+  // A shell that died mid-session leaves its restore record behind. The
+  // watchdog normally handles it; this covers a disabled watchdog and a
+  // plugin reload, where this service starts with no memory of the session.
+  function recoverPreviousSession() {
+    root.run(Lockdown.existsCommand(root.activePath), function(code) {
+      if (code !== 0 || root.state !== "idle") return
+      console.warn("sleep-mode: restoring the state left by a previous session")
+      root.run(Lockdown.restoreCommand(root.pluginDir))
+    })
   }
 
   // ---- status for the CLI ---------------------------------------------------
@@ -704,5 +739,6 @@ Scope {
     root.now = Date.now()
     configFile.reload()
     historyFile.reload()
+    root.recoverPreviousSession()
   }
 }
