@@ -16,6 +16,8 @@ import "Time.js" as Time
 //   armed    icon + compact countdown left click: the sleep screen
 //   ringing  error colour, pulsing    left click: the sleep screen
 //
+// Right click in any state opens the menu: Settings · Preview · Dry run.
+//
 HostUi.BarWidget {
   id: root
   moduleName: "io.github.heitorsdev.sleep-mode"
@@ -124,6 +126,10 @@ HostUi.BarWidget {
 
   // ---- clicks ------------------------------------------------------------
   function handlePress(mouseButton) {
+    if (mouseButton === Qt.RightButton) {
+      root.openPanel("menu")
+      return
+    }
     if (mouseButton === Qt.MiddleButton) return
     if (root.armed || root.ringing) {
       if (root.service && typeof root.service.openOverlay === "function") root.service.openOverlay()

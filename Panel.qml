@@ -29,7 +29,19 @@ Item {
   property bool popoutSwitching: false
   property bool popoutSwitchClosing: false
 
+  // The explicit confirm gate in front of the two test modes (SPEC §10).
+  property bool confirmOpen: false
+  property string confirmTitle: ""
+  property string confirmMessage: ""
+  property string confirmAction: ""
+
   readonly property var theme: panelTheme
+
+  readonly property var menuEntries: [
+    { key: "settings", label: "Settings", hint: "presets, display, palette" },
+    { key: "preview", label: "Preview", hint: "no side effects" },
+    { key: "dryrun", label: "Dry run", hint: "dims and plays the alarm" }
+  ]
 
   // ---- host contract -----------------------------------------------------
   function open(payloadJson) {
@@ -37,14 +49,25 @@ Item {
     try { payload = JSON.parse(payloadJson || "{}") || ({}) } catch (e) { payload = ({}) }
     var next = String(payload.view || root.view || "arm")
     if (next !== "arm" && next !== "settings" && next !== "menu") next = "arm"
+    root.view = next
+    root.confirmOpen = false
+    root.opened = true
   }
 
+  function close() {
+    root.confirmOpen = false
+    root.opened = false
+  }
 
   function toggle() {
     if (root.opened) root.close()
     else root.open(JSON.stringify({ view: root.view }))
   }
 
+  function showView(next) {
+    root.view = next
+    root.confirmOpen = false
+  }
 
   function cycleView(direction) {
     root.showView(root.view === "settings" ? "arm" : "settings")
@@ -54,6 +77,51 @@ Item {
     root.popoutSwitchClosing = true
     root.close()
     Qt.callLater(function() { root.popoutSwitchClosing = false })
+  }
+
+  // ---- menu actions ------------------------------------------------------
+  function handleMenu(key) {
+    if (key === "settings") {
+      root.showView("settings")
+      return
+    }
+    if (key === "preview") {
+      root.askConfirm("preview", "Preview the sleep screen",
+        "Preview draws the sleep screen with a fake countdown. Nothing is dimmed, no sound plays, no lock is taken and the camera is never touched.")
+      return
+    }
+    if (key === "dryrun") {
+      root.askConfirm("dryrun", "Dry run",
+        "A dry run dims the display, plays the alarm at full volume and rings in 10 seconds. The screen and the audio come back afterwards, and no history entry is written.")
+      return
+    }
+  }
+
+  function askConfirm(action, title, message) {
+    root.confirmAction = action
+    root.confirmTitle = title
+    root.confirmMessage = message
+    root.confirmOpen = true
+  }
+
+  function runConfirmed() {
+    var action = root.confirmAction
+    root.confirmOpen = false
+    if (!root.service) return
+    if (action === "preview") {
+      if (typeof root.service.startPreview === "function") root.service.startPreview()
+      root.close()
+    } else if (action === "dryrun") {
+      if (typeof root.service.startDryRun === "function") root.service.startDryRun(root.dryRunPayload())
+      root.close()
+    }
+  }
+
+  function dryRunPayload() {
+    var cfg = root.service && root.service.config ? root.service.config : ({})
+    var challenge = cfg.challenge ? cfg.challenge : ({})
+    var name = challenge.defaultPreset ? String(challenge.defaultPreset) : "standard"
+    return { duration: "10s", challenge: name, reps: 1 }
   }
 
   // ---- the popout --------------------------------------------------------
@@ -147,6 +215,84 @@ Item {
             visible: root.view === "settings"
             theme: root.theme
             service: root.service
+          }
+
+          // ---- menu ------------------------------------------------------
+          Menu {
+            id: menu
+            width: parent.width
+            visible: root.view === "menu"
+            theme: root.theme
+            entries: root.menuEntries
+            onChosen: function(key) { root.handleMenu(key) }
+          }
+        }
+      }
+
+      // ---- explicit confirm -----------------------------------------------
+      Rectangle {
+        id: confirmScrim
+        anchors.fill: parent
+        visible: root.confirmOpen
+        color: root.theme.alpha(root.theme.background, 0.88)
+
+        MouseArea {
+          anchors.fill: parent
+          onClicked: {}
+        }
+
+        Card {
+          id: confirmCard
+          anchors.centerIn: parent
+          width: Math.max(Style.space(220), confirmScrim.width - Style.space(40))
+          height: confirmColumn.implicitHeight + Style.space(20) * 2
+          theme: root.theme
+          color: root.theme.background
+
+          Column {
+            id: confirmColumn
+            anchors.centerIn: parent
+            width: parent.width - Style.space(20) * 2
+            spacing: Style.space(10)
+
+            Text {
+              width: parent.width
+              wrapMode: Text.WordWrap
+              textFormat: Text.PlainText
+              text: root.confirmTitle
+              color: root.theme.foreground
+              font.family: root.theme.fontFamily
+              font.pixelSize: Style.font.title
+              font.bold: true
+            }
+
+            Text {
+              width: parent.width
+              wrapMode: Text.WordWrap
+              textFormat: Text.PlainText
+              text: root.confirmMessage
+              color: root.theme.dim
+              font.family: root.theme.fontFamily
+              font.pixelSize: Style.font.bodySmall
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Button {
+                theme: root.theme
+                text: "cancel"
+                onClicked: root.confirmOpen = false
+              }
+
+              Button {
+                theme: root.theme
+                kind: "danger"
+                text: root.confirmAction === "dryrun" ? "run the dry run" : "show the preview"
+                onClicked: root.runConfirmed()
+              }
+            }
           }
         }
       }
