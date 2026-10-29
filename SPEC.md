@@ -251,6 +251,25 @@ user either.
   camera LED, no ACPI attribute, no fwupd entry. Only the near-black heuristic works.
 - No camera activity indicator exists on this machine.
 
+### The light gate (optional, parallel to the challenges)
+
+The camera is not a step in a preset. With `camera.requireLight` on (default
+off) it runs **alongside** the challenges as a gate:
+
+- The challenges are **locked** until the room light has been on for a moment
+  (3 steady samples, about a second), and **lock again** after about two
+  seconds below the threshold. Progress already made is kept.
+- The camera is open only while the challenge is on screen, never while just
+  the clock is up. A live view and a bar showing the light against the
+  threshold are shown; the threshold is the one global `camera.lightThreshold`.
+- Enforced in the service (`submit` refuses while locked), not only the UI.
+- Released for the rest of the session if the camera cannot be used: a lens
+  that stays black and flat for about five seconds, or a stream that dies.
+  A broken camera must never strand anyone.
+
+Camera steps in custom presets still run as before, but the camera is no
+longer offered as a step type and is not in the default presets or pool.
+
 ---
 
 ## 5. Display
@@ -585,7 +604,8 @@ file is valid and missing keys fall back to defaults.
     "lightThreshold": 60,          // mean luma (16=black, 235=white) that counts as "on"
     "nearBlackCutoff": 24,         // below this the camera is treated as unusable
     "autoSkipAfterFailures": 3,    // 0 = never auto-skip on failure
-    "warnOnArm": true              // arm-time blocked-lens pre-check
+    "warnOnArm": true,             // arm-time blocked-lens pre-check
+    "requireLight": false          // the light gate: challenges locked unless the light is on
   },
 
   // ---- challenges -------------------------------------------------------
