@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Crash watchdog (SPEC.md §11). Runs as a transient systemd user unit started
+# by the service when a session begins. If the shell process dies mid-session
+# the overlay vanishes but the display would stay dimmed and the alarm would
+# keep playing, so restore everything. A normal exit stops this unit first.
+set -u
+
+pid="${1:-}"
+case "$pid" in
+  ''|*[!0-9]*) echo "usage: sleep-mode-watchdog <shell-pid>" >&2; exit 2 ;;
+esac
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+while kill -0 "$pid" 2>/dev/null; do
+  sleep 2
+done
+
+exec bash "${here}/sleep-mode-restore"

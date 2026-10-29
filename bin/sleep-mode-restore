@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Undo everything a sleep-mode session changed, from the record the service
+# wrote to active.json before touching the machine (SPEC.md §6, §11).
+#
+# Idempotent and safe to race: the record is claimed with an atomic rename, so
+# the crash watchdog and the normal exit path can both run this and only one
+# of them acts. Every step tolerates the change never having happened.
+set -u
+
+state_dir="${HOME}/.local/state/omarchy/sleep-mode"
+active="${state_dir}/active.json"
+claimed="${state_dir}/active.json.restoring.$$"
+
+[ -e "$active" ] || exit 0
+mv "$active" "$claimed" 2>/dev/null || exit 0
+
+if ! command -v jq >/dev/null 2>&1; then
+  # Without jq the record cannot be read; still stop the loud parts.
+  pkill -f omarchy-sleep-mode-alarm 2>/dev/null
+  pkill -f omarchy-sleep-mode-inhibit 2>/dev/null
+  hyprctl hyprsunset identity >/dev/null 2>&1
+  rm -f "$claimed"
+  exit 0
+fi
+
+get() { jq -r "$1 // empty" "$claimed" 2>/dev/null; }
+
+# ---- audio: silence first so a crash never leaves the alarm looping ---------
+pkill -f omarchy-sleep-mode-alarm 2>/dev/null
+player_pid="$(get '.audio.playerPid')"
+if [ -n "$player_pid" ] && [ "$player_pid" != "0" ] \
+   && tr '\0' ' ' < "/proc/$player_pid/cmdline" 2>/dev/null | grep -q omarchy-sleep-mode-alarm; then
+  kill "$player_pid" 2>/dev/null
+fi
+pkill -f omarchy-sleep-mode-inhibit 2>/dev/null
+
+sink="$(get '.audio.sink')"
+if [ -n "$sink" ] && [ "$(get '.audio.restoreVolume')" = "true" ]; then
+  mapfile -t raws < <(jq -r '.audio.volumeRaw // [] | .[] | tostring' "$claimed" 2>/dev/null)
+  if [ "${#raws[@]}" -gt 0 ]; then
+    pactl set-sink-volume "$sink" "${raws[@]}" >/dev/null 2>&1
+  fi
+  muted="$(get '.audio.muted')"
+  case "$muted" in
+    true)  pactl set-sink-mute "$sink" 1 >/dev/null 2>&1 ;;
+    false) pactl set-sink-mute "$sink" 0 >/dev/null 2>&1 ;;
+  esac
+fi
+
+# ---- display ----------------------------------------------------------------
+device="$(get '.display.device')"
+raw="$(get '.display.brightnessRaw')"
+if [ "$(get '.display.restoreBrightness')" = "true" ] && [ -n "$device" ] && [ -n "$raw" ]; then
+  brightnessctl -d "$device" set "$raw" >/dev/null 2>&1
+fi
+
+if [ "$(get '.display.gammaApplied')" = "true" ]; then
+  if [ "$(get '.display.hyprsunsetWasRunning')" = "true" ]; then
+    # Someone else (the nightlight toggle) owns hyprsunset: put only the gamma
+    # back so their temperature survives.
+    prev="$(get '.display.previousGamma')"
+    hyprctl hyprsunset gamma "${prev:-100}" >/dev/null 2>&1
+  else
+    hyprctl hyprsunset identity >/dev/null 2>&1
+  fi
+fi
+if [ "$(get '.display.startedHyprsunset')" = "true" ]; then
+  pkill -x hyprsunset 2>/dev/null
+fi
+
+# ---- lockdown ---------------------------------------------------------------
+if [ "$(get '.lockdown.stayAwakeCreated')" = "true" ]; then
+  rm -f "${HOME}/.local/state/omarchy/indicators/stay-awake"
+fi
+if [ "$(get '.lockdown.barOffCreated')" = "true" ]; then
+  rm -f "${HOME}/.local/state/omarchy/toggles/bar-off"
+  omarchy-shell -q omarchy.bar syncHidden >/dev/null 2>&1
+fi
+if [ "$(get '.lockdown.dndSet')" = "true" ]; then
+  omarchy-shell -q notifications setDnd off >/dev/null 2>&1
+  omarchy-shell -q omarchy.indicators refresh >/dev/null 2>&1
+fi
+
+rm -f "$claimed"
+exit 0
