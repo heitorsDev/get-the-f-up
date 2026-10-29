@@ -125,6 +125,62 @@ function watchStep(state, sample, cameraConfig) {
   }
 }
 
+// ---------------------------------------------------------- the light gate
+// The optional "require the light" mode runs alongside the challenges rather
+// than as a step: while it is on, the challenges are locked unless the room
+// light is on, and they lock again if it goes off.
+//
+// Unlocking takes the same few steady samples as a camera step. Locking again
+// waits a couple of seconds below the threshold, so a passing shadow or an
+// auto-exposure wobble does not slam the challenge shut. A lens that stays
+// black and flat is not a light that is off: the gate lets go of it ("blocked",
+// like the camera step's blocked-lens skip), so an unusable camera never
+// strands anyone.
+var GATE_ON_SAMPLES = 3
+var GATE_OFF_SAMPLES = 6
+
+function gateInit() {
+  return { unlocked: false, bright: 0, dark: 0, blocked: 0, released: "" }
+}
+
+// sample: { luma, spread } ->
+//   { state, unlocked, released, verdict, progress, hold }
+// released: "" | "blocked" (the gate no longer applies this session)
+function gateStep(state, sample, cameraConfig) {
+  var cfg = cameraConfig || {}
+  var prev = state || gateInit()
+  var threshold = cfg.lightThreshold === undefined ? 60 : Number(cfg.lightThreshold)
+  var luma = sample ? Number(sample.luma) : -1
+  var spread = sample && sample.spread !== undefined ? Number(sample.spread) : -1
+  var v = verdict(luma, spread, cfg)
+
+  var next = { unlocked: prev.unlocked, bright: prev.bright, dark: prev.dark,
+    blocked: prev.blocked, released: prev.released }
+  if (v === "unknown" || next.released !== "") {
+    // No reading yet, or already let go: nothing to count.
+  } else {
+    var isBright = luma >= threshold
+    next.bright = isBright ? prev.bright + 1 : 0
+    next.dark = isBright ? 0 : prev.dark + 1
+    next.blocked = v === "blocked" ? prev.blocked + 1 : 0
+    if (next.blocked >= WATCH_BLOCKED_SAMPLES) next.released = "blocked"
+    else if (!next.unlocked && next.bright >= GATE_ON_SAMPLES) next.unlocked = true
+    else if (next.unlocked && next.dark >= GATE_OFF_SAMPLES) next.unlocked = false
+  }
+
+  return {
+    state: next,
+    unlocked: next.released !== "" || next.unlocked,
+    released: next.released,
+    verdict: v,
+    progress: watchProgress(luma, threshold),
+    // While locked, how far into the steady light the unlock is; while
+    // unlocked, how far into the dark the re-lock is (full = still fine).
+    hold: next.unlocked ? 1 - Math.min(1, next.dark / GATE_OFF_SAMPLES)
+      : Math.min(1, next.bright / GATE_ON_SAMPLES)
+  }
+}
+
 // One-shot capture whose output and exit code arrive on the same stream.
 // Reading the exit code from the Process `exited` signal races the output
 // collectors and can leave the text empty (parsed as ENODATA).
@@ -259,6 +315,10 @@ if (typeof module !== "undefined" && module.exports) {
     parseLiveLine: parseLiveLine,
     liveErrorCode: liveErrorCode,
     verdict: verdict,
+    GATE_ON_SAMPLES: GATE_ON_SAMPLES,
+    GATE_OFF_SAMPLES: GATE_OFF_SAMPLES,
+    gateInit: gateInit,
+    gateStep: gateStep,
     WATCH_PASS_SAMPLES: WATCH_PASS_SAMPLES,
     WATCH_BLOCKED_SAMPLES: WATCH_BLOCKED_SAMPLES,
     watchInit: watchInit,

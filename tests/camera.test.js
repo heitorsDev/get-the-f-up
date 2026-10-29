@@ -282,3 +282,80 @@ test("watchStep follows the threshold it is given", () => {
   assert.equal(feed([sample, sample, sample], { lightThreshold: 120, nearBlackCutoff: 24 })[2].outcome, "waiting")
   assert.equal(feed([sample, sample, sample], { lightThreshold: 80, nearBlackCutoff: 24 })[2].outcome, "pass")
 })
+
+// ------------------------------------------------------------ the light gate
+
+function gateFeed(samples, cfg) {
+  let state = Camera.gateInit()
+  return samples.map((s) => {
+    const r = Camera.gateStep(state, s, cfg)
+    state = r.state
+    return r
+  })
+}
+
+const GATE_CFG = { lightThreshold: 60, nearBlackCutoff: 24 }
+const LIT = { luma: 90, spread: 80 }
+const DIM = { luma: 40, spread: 60 }
+const BLACK = { luma: 17, spread: 0 }
+const rep = (s, n) => new Array(n).fill(s)
+
+test("gate starts locked and unlocks after a few steady bright samples", () => {
+  const r = gateFeed(rep(LIT, 3), GATE_CFG)
+  assert.deepEqual(r.map((x) => x.unlocked), [false, false, true])
+  assert.equal(r[0].hold, 1 / 3)
+  assert.equal(r[2].verdict, "on")
+})
+
+test("gate: one bright frame does not unlock, and a dim one resets the count", () => {
+  const r = gateFeed([LIT, LIT, DIM, LIT, LIT], GATE_CFG)
+  assert.ok(r.every((x) => !x.unlocked))
+})
+
+test("gate re-locks only after the light has been off for a couple of seconds", () => {
+  const r = gateFeed([...rep(LIT, 3), ...rep(DIM, 6)], GATE_CFG)
+  assert.equal(r[3].unlocked, true)   // 1 dim sample
+  assert.equal(r[7].unlocked, true)   // 5 dim samples
+  assert.equal(r[8].unlocked, false)  // 6 dim samples: locked again
+})
+
+test("gate: a short dark blip while unlocked keeps it unlocked", () => {
+  const r = gateFeed([...rep(LIT, 3), DIM, DIM, ...rep(LIT, 3)], GATE_CFG)
+  assert.ok(r.slice(2).every((x) => x.unlocked))
+})
+
+test("gate: unlocked hold shrinks toward the re-lock as the dark goes on", () => {
+  const r = gateFeed([...rep(LIT, 3), DIM, DIM, DIM], GATE_CFG)
+  assert.equal(r[2].hold, 1)
+  assert.equal(r[5].hold, 0.5)
+})
+
+test("gate lets go of a lens that stays black and flat", () => {
+  const r = gateFeed(rep(BLACK, 15), GATE_CFG)
+  assert.equal(r[13].released, "")
+  assert.equal(r[13].unlocked, false)
+  assert.equal(r[14].released, "blocked")
+  assert.equal(r[14].unlocked, true)
+})
+
+test("gate: warm-up black followed by light is not a blocked lens", () => {
+  const r = gateFeed([...rep(BLACK, 10), ...rep(LIT, 3)], GATE_CFG)
+  assert.equal(r[r.length - 1].unlocked, true)
+  assert.ok(r.every((x) => x.released === ""))
+})
+
+test("gate: once released it stays released", () => {
+  const r = gateFeed([...rep(BLACK, 15), ...rep(DIM, 10)], GATE_CFG)
+  assert.equal(r[r.length - 1].released, "blocked")
+  assert.equal(r[r.length - 1].unlocked, true)
+})
+
+test("gate ignores samples with no reading", () => {
+  const r = gateFeed(rep({ luma: -1, spread: -1 }, 5), GATE_CFG)
+  assert.ok(r.every((x) => !x.unlocked && x.verdict === "unknown"))
+})
+
+test("gate follows the threshold it is given", () => {
+  assert.equal(gateFeed(rep(LIT, 3), { lightThreshold: 120, nearBlackCutoff: 24 })[2].unlocked, false)
+  assert.equal(gateFeed(rep(LIT, 3), { lightThreshold: 80, nearBlackCutoff: 24 })[2].unlocked, true)
+})
