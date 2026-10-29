@@ -598,7 +598,7 @@ Item {
       onEdited: function(value) { root.setPath("camera.device", value) }
     }
 
-    Spinner {
+    NumberField {
       width: parent.width
       theme: root.theme
       label: "light threshold"
@@ -609,7 +609,7 @@ Item {
       onModified: function(value) { root.setPath("camera.lightThreshold", value) }
     }
 
-    Spinner {
+    NumberField {
       width: parent.width
       theme: root.theme
       label: "near-black cutoff"
