@@ -39,7 +39,8 @@ Item {
 
   readonly property var menuEntries: [
     { key: "settings", label: "Settings", hint: "presets, display, palette" },
-    { key: "preview", label: "Preview", hint: "no side effects" },
+    { key: "preview_armed", label: "Preview idle screen", hint: "no side effects" },
+    { key: "preview_ringing", label: "Preview alarm screen", hint: "no side effects" },
     { key: "dryrun", label: "Dry run", hint: "dims and plays the alarm" }
   ]
 
@@ -87,9 +88,10 @@ Item {
       root.showView("settings")
       return
     }
-    if (key === "preview") {
-      root.askConfirm("preview", "Preview the sleep screen",
-        "Preview draws the sleep screen with a fake countdown. Nothing is dimmed, no sound plays, no lock is taken and the camera is never touched.")
+    // A preview changes nothing (no dim, no sound, no lock, no camera), so it
+    // needs no confirmation.
+    if (key === "preview_armed" || key === "preview_ringing") {
+      root.runPreview(key === "preview_ringing" ? "ringing" : "armed")
       return
     }
     if (key === "dryrun") {
@@ -97,6 +99,16 @@ Item {
         "A dry run dims the display, plays the alarm at full volume and rings in 10 seconds. The screen and the audio come back afterwards, and no history entry is written.")
       return
     }
+  }
+
+  function runPreview(variant) {
+    if (root.service && typeof root.service.startPreview === "function") root.service.startPreview(variant)
+    root.close()
+  }
+
+  function askDryRun() {
+    root.askConfirm("dryrun", "Dry run",
+      "A dry run dims the display, plays the alarm at full volume and rings in 10 seconds. The screen and the audio come back afterwards, and no history entry is written.")
   }
 
   function askConfirm(action, title, message) {
@@ -209,6 +221,8 @@ Item {
             service: root.service
             onCloseRequested: root.close()
             onArmed: root.close()
+            onPreviewRequested: function(variant) { root.runPreview(variant) }
+            onDryRunRequested: root.askDryRun()
           }
 
           // ---- settings --------------------------------------------------
@@ -218,6 +232,8 @@ Item {
             visible: root.view === "settings"
             theme: root.theme
             service: root.service
+            onPreviewRequested: function(variant) { root.runPreview(variant) }
+            onDryRunRequested: root.askDryRun()
           }
 
           // ---- menu ------------------------------------------------------

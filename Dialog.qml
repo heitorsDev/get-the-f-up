@@ -24,6 +24,8 @@ Item {
   // camera may be probed.
   property bool active: false
 
+  signal previewRequested(string variant)
+  signal dryRunRequested()
   signal closeRequested()
   signal armed()
 
@@ -361,6 +363,46 @@ Item {
         color: root.theme.error
         font.family: root.theme.fontFamily
         font.pixelSize: Style.font.caption
+      }
+    }
+
+    // ---- see it first ----------------------------------------------------
+    Text {
+      width: parent.width
+      textFormat: Text.PlainText
+      text: "see it first"
+      color: root.theme.dim
+      font.family: root.theme.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
+    Flow {
+      width: parent.width
+      spacing: Style.space(8)
+
+      Button {
+        theme: root.theme
+        compact: true
+        text: "preview idle"
+        tooltip: "the sleep screen while waiting. changes nothing"
+        onClicked: root.previewRequested("armed")
+      }
+
+      Button {
+        theme: root.theme
+        compact: true
+        text: "preview alarm"
+        tooltip: "the WAKE UP screen. changes nothing"
+        onClicked: root.previewRequested("ringing")
+      }
+
+      Button {
+        theme: root.theme
+        compact: true
+        kind: "danger"
+        text: "dry run"
+        tooltip: "dims and plays the alarm for real, then restores everything"
+        onClicked: root.dryRunRequested()
       }
     }
   }
