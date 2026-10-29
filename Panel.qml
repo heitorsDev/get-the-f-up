@@ -57,6 +57,8 @@ Item {
   function close() {
     root.confirmOpen = false
     root.opened = false
+    // Never leave the camera open behind a closed panel.
+    if (root.service) root.service.stopCameraLive()
   }
 
   function toggle() {

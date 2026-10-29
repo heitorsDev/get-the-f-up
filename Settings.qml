@@ -598,6 +598,17 @@ Item {
       onEdited: function(value) { root.setPath("camera.device", value) }
     }
 
+    CameraPreview {
+      id: cameraPreview
+      width: parent.width
+      theme: root.theme
+      service: root.service
+      device: root.strAt("camera.device", "")
+      threshold: root.numAt("camera.lightThreshold", 60)
+      cutoff: root.numAt("camera.nearBlackCutoff", 24)
+      onThresholdPicked: function(value) { root.setPath("camera.lightThreshold", value) }
+    }
+
     NumberField {
       width: parent.width
       theme: root.theme
