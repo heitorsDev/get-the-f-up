@@ -242,6 +242,11 @@ Item {
 
   Component.onCompleted: root.reload()
 
+  // The service can show up after the panel was built, in which case the
+  // first draft was built from the defaults. Reload it once the real
+  // config is reachable.
+  onServiceChanged: root.reload()
+
   implicitHeight: column.implicitHeight
 
   Column {

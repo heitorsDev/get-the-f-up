@@ -142,12 +142,24 @@ Item {
     root.armed()
   }
 
-  Component.onCompleted: {
-    root.presetName = root.defaultPresetName()
+  // The service can show up after the dialog was built (the bar widget
+  // rebinds once the plugin service registers), so the form syncs itself
+  // with the live config whenever the service changes.
+  function syncFromConfig() {
     var challenge = root.config.challenge ? root.config.challenge : ({})
     root.reps = challenge.reps ? Math.max(1, Number(challenge.reps)) : 1
+    var wanted = root.defaultPresetName()
+    if (wanted !== root.presetName) {
+      // onPresetNameChanged resets the camera opt-out and prechecks again.
+      root.presetName = wanted
+      return
+    }
     root.maybePrecheck()
   }
+
+  Component.onCompleted: root.syncFromConfig()
+
+  onServiceChanged: root.syncFromConfig()
 
   onPresetNameChanged: {
     root.removeCamera = false
