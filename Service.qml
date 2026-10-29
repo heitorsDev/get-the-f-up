@@ -598,6 +598,8 @@ Scope {
     }
     onExited: function(exitCode) {
       var wanted = root.cameraLive
+      console.log("sleep-mode: camera preview process exited with " + exitCode
+        + (root.cameraLiveError ? " (" + root.cameraLiveError + ")" : ""))
       root.cameraLive = false
       root.cameraFrame = ""
       if (wanted && root.cameraLiveError === "") {
@@ -614,6 +616,7 @@ Scope {
       } else if (stat.key === "YHIGH") {
         if (root._liveLow >= 0) root.cameraSpread = Math.max(0, stat.value - root._liveLow)
       } else {
+        if (root.cameraFrameSeq === 0) console.log("sleep-mode: camera preview first frame, luma " + stat.value)
         root.cameraLuma = stat.value
         root.cameraLiveError = ""
         // The frame is written just after its statistics are printed.
@@ -623,7 +626,10 @@ Scope {
       return
     }
     var code = Camera.liveErrorCode(line)
-    if (code) root.cameraLiveError = code
+    if (code) {
+      console.log("sleep-mode: camera preview error " + code + ": " + line)
+      root.cameraLiveError = code
+    }
   }
 
   // device is optional: the settings panel passes the draft's, so a device
@@ -637,7 +643,9 @@ Scope {
     root._liveLow = -1
     root.cameraLiveError = ""
     root.cameraFrame = ""
+    root.cameraFrameSeq = 0
     root.cameraLive = true
+    console.log("sleep-mode: camera preview starting on " + (device || root.config.camera.device))
     liveProc.command = Camera.liveCommand(device || root.config.camera.device, root.runtimeDir, Camera.LIVE_FPS)
     liveProc.running = true
     return root.ok()

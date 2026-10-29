@@ -152,17 +152,47 @@ Card {
       border.color: root.theme.border
       clip: true
 
-      Image {
+      // Two images take turns: the hidden one reloads the (overwritten) file
+      // and is shown once it is ready, so there is no flicker and no reliance
+      // on a changing URL to defeat the cache.
+      Item {
+        id: frames
         anchors.fill: parent
         anchors.margins: 1
-        visible: status === Image.Ready
-        fillMode: Image.PreserveAspectFit
-        // A selfie view: moving left moves left on screen.
-        mirror: true
-        cache: false
-        asynchronous: true
-        source: root.service && root.service.cameraFrame !== ""
-          ? root.service.cameraFrame + "?" + root.service.cameraFrameSeq : ""
+
+        property bool showA: true
+        readonly property string url: root.service ? String(root.service.cameraFrame) : ""
+        readonly property int seq: root.service ? Number(root.service.cameraFrameSeq) : 0
+
+        onSeqChanged: {
+          if (frames.url === "") return
+          var target = frames.showA ? frameB : frameA
+          target.source = ""
+          target.source = frames.url
+        }
+
+        Image {
+          id: frameA
+          anchors.fill: parent
+          visible: frames.showA && status === Image.Ready
+          fillMode: Image.PreserveAspectFit
+          // A selfie view: moving left moves left on screen.
+          mirror: true
+          cache: false
+          asynchronous: true
+          onStatusChanged: if (status === Image.Ready) frames.showA = true
+        }
+
+        Image {
+          id: frameB
+          anchors.fill: parent
+          visible: !frames.showA && status === Image.Ready
+          fillMode: Image.PreserveAspectFit
+          mirror: true
+          cache: false
+          asynchronous: true
+          onStatusChanged: if (status === Image.Ready) frames.showA = false
+        }
       }
 
       Text {
