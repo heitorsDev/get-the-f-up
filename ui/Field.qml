@@ -54,6 +54,14 @@ Rectangle {
     maximumLength: root.maximumLength
     onTextEdited: root.edited(text)
     onAccepted: root.accepted()
+
+    // Escape leaves the field instead of closing the panel that hosts it.
+    // The handler runs on the focused item, so accepting the key here stops
+    // it before the panel's own key catcher ever sees it.
+    Keys.onEscapePressed: function(event) {
+      input.focus = false
+      event.accepted = true
+    }
   }
 
   Text {
