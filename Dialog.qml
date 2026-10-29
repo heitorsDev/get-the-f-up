@@ -19,6 +19,11 @@ Item {
   property var theme: fallbackTheme
   property var service: null
 
+  // True while the arming form is actually on screen. The form is built
+  // with the popout, so "visible" alone is not enough to decide that the
+  // camera may be probed.
+  property bool active: false
+
   signal closeRequested()
   signal armed()
 
@@ -120,7 +125,11 @@ Item {
     ? Time.formatClock(root.previewRingAt, { h24: true, seconds: false }) : ""
 
   // ---- actions -----------------------------------------------------------
+  // The camera is only ever probed while the arming form is on screen. The
+  // form exists from the start (it is built with the popout), so without
+  // this guard the camera would be opened at bar startup.
   function maybePrecheck() {
+    if (!root.active) return
     if (!root.service || typeof root.service.precheckCamera !== "function") return
     var camera = root.config.camera ? root.config.camera : ({})
     if (camera.enabled === false || camera.warnOnArm === false) return
@@ -160,6 +169,10 @@ Item {
   Component.onCompleted: root.syncFromConfig()
 
   onServiceChanged: root.syncFromConfig()
+
+  onActiveChanged: {
+    if (root.active) root.maybePrecheck()
+  }
 
   onPresetNameChanged: {
     root.removeCamera = false

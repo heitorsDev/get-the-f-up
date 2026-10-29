@@ -202,6 +202,7 @@ Item {
             id: armDialog
             width: parent.width
             visible: root.view === "arm"
+            active: root.opened && root.view === "arm"
             theme: root.theme
             service: root.service
             onCloseRequested: root.close()
