@@ -119,21 +119,32 @@ Scope {
   // ---- the one-shot command runner -----------------------------------------
   // A single Process runs every short-lived command in order. Each step is
   // { cmd: [argv], done: function(exitCode, output) }.
+  //
+  // Every command runs inside a small wrapper that merges stderr into stdout
+  // and prints its exit code as a last line. The step finishes when that one
+  // stream ends, never from the Process `exited` signal: `exited` can fire
+  // before the collector has been drained, which handed callers an empty
+  // string and silently broke the state capture, the sink probe and the
+  // sound pick.
   property var _queue: []
   property var _current: null
   property bool _stepStarted: false
+  property int _stepExit: 1
   property int _outMark: 0
-  property int _errMark: 0
 
   Process {
     id: runner
-    stdout: StdioCollector { id: runnerOut }
-    stderr: StdioCollector { id: runnerErr }
+    stdout: StdioCollector {
+      id: runnerOut
+      onStreamFinished: root.finishStep(runnerOut.text.substring(root._outMark))
+    }
 
     onStarted: root._stepStarted = true
-    onExited: function(exitCode, exitStatus) {
-      root.finishStep(exitCode,
-        runnerOut.text.substring(root._outMark) + runnerErr.text.substring(root._errMark))
+    // The stream normally ends first; if a command left a grandchild holding
+    // the pipe open, fall back to what has been read after a short wait.
+    onExited: function(exitCode) {
+      root._stepExit = exitCode
+      stepSettle.restart()
     }
     onRunningChanged: {
       // A command that cannot even start never emits `exited`; treat it as a
@@ -141,9 +152,15 @@ Scope {
       if (runner.running) {
         root._stepStarted = true
       } else if (root._current !== null && !root._stepStarted) {
-        root.finishStep(127, "")
+        root.finishStep("@@exit=127")
       }
     }
+  }
+
+  Timer {
+    id: stepSettle
+    interval: 1500
+    onTriggered: root.finishStep(runnerOut.text.substring(root._outMark))
   }
 
   function enqueue(steps) {
@@ -161,16 +178,23 @@ Scope {
     if (root._queue.length === 0) return
     root._current = root._queue.shift()
     root._stepStarted = false
+    root._stepExit = 1
     root._outMark = runnerOut.text.length
-    root._errMark = runnerErr.text.length
-    runner.command = root._current.cmd
+    runner.command = ["bash", "-c", "\"$@\" 2>&1; rc=$?; echo \"@@exit=$rc\"", "sleep-mode-step"]
+      .concat(root._current.cmd)
     runner.running = true
   }
 
-  function finishStep(exitCode, output) {
+  function finishStep(text) {
+    stepSettle.stop()
     var step = root._current
+    if (step === null) return
     root._current = null
-    if (step && step.done) {
+    var raw = String(text || "")
+    var marked = Camera.parseWrappedExit(raw)
+    var exitCode = marked === null ? root._stepExit : marked
+    var output = raw.replace(/@@exit=\d+\s*$/, "")
+    if (step.done) {
       try {
         step.done(exitCode, output)
       } catch (e) {
@@ -287,6 +311,7 @@ Scope {
   function beginSession(payload, dry) {
     if (root.state !== "idle") return root.fail("sleep mode is already active")
     if (root.previewing) root.stopPreview()
+    root.stopCameraLive()
 
     var request = payload || {}
     var when = { ringAt: 0, error: "" }
@@ -499,41 +524,134 @@ Scope {
 
   // ---- the camera -----------------------------------------------------------
   // A dedicated Process: a capture can take ten seconds and must never hold
-  // up the restore commands queued behind it on the shared runner. No image
-  // is written anywhere; ffmpeg prints luminance statistics and discards the
-  // frame.
+  // up the restore commands queued behind it on the shared runner. Nothing is
+  // written anywhere; ffmpeg prints luminance statistics and discards the
+  // frame. Like the runner, it finishes when its single output stream ends.
   property var _cameraDone: null
   property bool _cameraStarted: false
+  property int _cameraExit: 1
 
   Process {
     id: cameraProc
-    stdout: StdioCollector { id: cameraOut }
-    stderr: StdioCollector { id: cameraErr }
+    stdout: StdioCollector {
+      id: cameraOut
+      onStreamFinished: root.finishCamera(cameraOut.text)
+    }
     onStarted: root._cameraStarted = true
     onExited: function(exitCode) {
-      root.finishCamera(exitCode, cameraOut.text + "\n" + cameraErr.text)
+      root._cameraExit = exitCode
+      cameraSettle.restart()
     }
     onRunningChanged: {
       // A command that cannot start never emits `exited`.
       if (!cameraProc.running && root._cameraDone !== null && !root._cameraStarted) {
-        root.finishCamera(127, "")
+        root.finishCamera("@@exit=127")
       }
     }
   }
 
+  Timer {
+    id: cameraSettle
+    interval: 1500
+    onTriggered: root.finishCamera(cameraOut.text)
+  }
+
   function runCamera(done) {
-    if (cameraProc.running || root._cameraDone !== null) return false
+    // One open of the device at a time: a live preview holds it.
+    if (cameraProc.running || root._cameraDone !== null || root.cameraLive) return false
     root._cameraDone = done
     root._cameraStarted = false
-    cameraProc.command = Camera.captureCommand(root.config.camera.device, Camera.SETTLE_FRAMES)
+    root._cameraExit = 1
+    cameraProc.command = Camera.captureShellCommand(root.config.camera.device, Camera.SETTLE_FRAMES)
     cameraProc.running = true
     return true
   }
 
-  function finishCamera(exitCode, text) {
+  function finishCamera(text) {
+    cameraSettle.stop()
     var done = root._cameraDone
+    if (done === null) return
     root._cameraDone = null
-    if (done) done(Camera.reading(text, exitCode))
+    var raw = String(text || "")
+    var marked = Camera.parseWrappedExit(raw)
+    done(Camera.reading(raw, marked === null ? root._cameraExit : marked))
+  }
+
+  // ---- the live preview (settings panel) -------------------------------------
+  // Off until startCameraLive() is called from an explicit button, and stopped
+  // when the panel closes, a session begins or the shell goes away. Frames go
+  // to a file in the runtime dir (tmpfs) for the panel to show; it is removed
+  // on stop. See Camera.liveCommand.
+  readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
+  property bool cameraLive: false
+  property real cameraLuma: -1
+  property real cameraSpread: -1
+  property string cameraLiveError: ""
+  property string cameraFrame: ""
+  property int cameraFrameSeq: 0
+  property real _liveLow: -1
+
+  Process {
+    id: liveProc
+    stderr: SplitParser {
+      onRead: function(line) { root.onLiveLine(line) }
+    }
+    onExited: function(exitCode) {
+      var wanted = root.cameraLive
+      root.cameraLive = false
+      root.cameraFrame = ""
+      if (wanted && root.cameraLiveError === "") {
+        root.cameraLiveError = exitCode === 124 ? "stopped after ten minutes" : "EIO"
+      }
+    }
+  }
+
+  function onLiveLine(line) {
+    var stat = Camera.parseLiveLine(line)
+    if (stat) {
+      if (stat.key === "YLOW") {
+        root._liveLow = stat.value
+      } else if (stat.key === "YHIGH") {
+        if (root._liveLow >= 0) root.cameraSpread = Math.max(0, stat.value - root._liveLow)
+      } else {
+        root.cameraLuma = stat.value
+        root.cameraLiveError = ""
+        // The frame is written just after its statistics are printed.
+        root.cameraFrame = "file://" + Camera.previewFile(root.runtimeDir)
+        root.cameraFrameSeq = root.cameraFrameSeq + 1
+      }
+      return
+    }
+    var code = Camera.liveErrorCode(line)
+    if (code) root.cameraLiveError = code
+  }
+
+  // device is optional: the settings panel passes the draft's, so a device
+  // typed but not yet saved can be tried.
+  function startCameraLive(device) {
+    if (root.state !== "idle") return root.fail("sleep mode is active")
+    if (root.cameraLive) return root.ok()
+    if (cameraProc.running || root._cameraDone !== null) return root.fail("the camera is busy")
+    root.cameraLuma = -1
+    root.cameraSpread = -1
+    root._liveLow = -1
+    root.cameraLiveError = ""
+    root.cameraFrame = ""
+    root.cameraLive = true
+    liveProc.command = Camera.liveCommand(device || root.config.camera.device, root.runtimeDir, Camera.LIVE_FPS)
+    liveProc.running = true
+    return root.ok()
+  }
+
+  function stopCameraLive() {
+    if (!root.cameraLive && !liveProc.running) return root.ok()
+    root.cameraLive = false
+    liveProc.running = false
+    root.cameraFrame = ""
+    root.cameraLuma = -1
+    root.cameraSpread = -1
+    root.run(Camera.cleanupCommand(root.runtimeDir))
+    return root.ok()
   }
 
   // Arm-time check: is the lens blocked? (SPEC.md §4)
@@ -733,6 +851,10 @@ Scope {
     function dryrun(): string {
       return JSON.stringify(root.startDryRun({}))
     }
+  }
+
+  Component.onDestruction: {
+    if (liveProc.running) liveProc.running = false
   }
 
   Component.onCompleted: {
