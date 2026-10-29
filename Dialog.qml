@@ -4,6 +4,7 @@ import QtQuick
 import qs.Commons
 import "ui"
 import "Config.js" as Config
+import "Time.js" as Time
 import "Steps.js" as Steps
 
 // The arming form (SPEC §9).
@@ -29,6 +30,8 @@ Item {
   property int reps: 1
   property bool removeCamera: false
   property string errorText: ""
+
+  property real previewNow: Date.now()
 
   readonly property var config: root.service && root.service.config ? root.service.config : ({})
 
@@ -106,6 +109,16 @@ Item {
     return p
   }
 
+  // The preview parses the very payload the arm button would send, so what
+  // the user sees is what the service will do.
+  readonly property real previewRingAt: {
+    var parsed = Time.parseWhen(root.payload, Date.now())
+    return parsed && parsed.ringAt ? parsed.ringAt : 0
+  }
+
+  readonly property string previewRingText: root.previewRingAt > 0
+    ? Time.formatClock(root.previewRingAt, { h24: true, seconds: false }) : ""
+
   // ---- actions -----------------------------------------------------------
   function maybePrecheck() {
     if (!root.service || typeof root.service.precheckCamera !== "function") return
@@ -139,6 +152,13 @@ Item {
   onPresetNameChanged: {
     root.removeCamera = false
     root.maybePrecheck()
+  }
+
+  Timer {
+    interval: 1000
+    repeat: true
+    running: true
+    onTriggered: root.previewNow = Date.now()
   }
 
   implicitHeight: column.implicitHeight
@@ -259,6 +279,39 @@ Item {
           onClicked: root.removeCamera = true
         }
       }
+    }
+
+    // ---- live preview ----------------------------------------------------
+    SectionHeader {
+      width: parent.width
+      theme: root.theme
+      text: "preview"
+    }
+
+    Card {
+      width: parent.width
+      height: Style.space(120)
+      theme: root.theme
+
+      SleepScreen {
+        anchors.centerIn: parent
+        theme: root.theme
+        now: root.previewNow
+        ringAt: root.previewRingAt
+        sizeScale: 0.28
+      }
+    }
+
+    Text {
+      width: parent.width
+      visible: root.previewRingText !== ""
+      textFormat: Text.PlainText
+      text: root.previewRingText !== ""
+        ? "the alarm rings at " + root.previewRingText
+        : ""
+      color: root.theme.faint
+      font.family: root.theme.fontFamily
+      font.pixelSize: Style.font.caption
     }
 
     // ---- arm -------------------------------------------------------------
