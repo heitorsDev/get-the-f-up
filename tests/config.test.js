@@ -38,7 +38,11 @@ test('defaults match the SPEC §16 shape', () => {
   assert.deepEqual(Object.keys(d.challenge.presets), ['standard', 'thorough', 'quick']);
   assert.equal(d.challenge.presets.standard.steps.length, 3);
   assert.ok(d.challenge.presets.standard.steps.every((s) => s.type === 'math'));
-  assert.deepEqual(d.challenge.presets.thorough.steps.map((s) => s.type), ['camera', 'math', 'math', 'math']);
+  assert.deepEqual(d.challenge.presets.thorough.steps.map((s) => s.type), ['string', 'math', 'math', 'math']);
+  // The camera is an optional gate, not a default step.
+  assert.equal(d.camera.requireLight, false);
+  assert.ok(!d.challenge.presets.thorough.steps.some((s) => s.type === 'camera'));
+  assert.equal(d.challenge.pool.camera, undefined);
   assert.deepEqual(d.challenge.presets.quick.steps, [{ type: 'string', charset: 'alnum', length: 8 }]);
   assert.equal(d.challenge.pool.math.weight, 3);
   assert.equal(d.lockdown.maxDurationMinutes, 0);
@@ -124,7 +128,7 @@ test('pool entries deep-merge', () => {
   const c = Config.merge({ challenge: { pool: { math: { weight: 10 } } } });
   assert.equal(c.challenge.pool.math.weight, 10);
   assert.equal(c.challenge.pool.math.operators, '+-x');
-  assert.equal(c.challenge.pool.camera.weight, 1);
+  assert.equal(c.challenge.pool.string.weight, 2);
 });
 
 test('reps is clamped to a positive integer', () => {

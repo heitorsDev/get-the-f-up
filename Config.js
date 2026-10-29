@@ -34,7 +34,10 @@ function defaults() {
       lightThreshold: 60,
       nearBlackCutoff: 24,
       autoSkipAfterFailures: 3,
-      warnOnArm: true
+      warnOnArm: true,
+      // The light gate: while on, the challenges are locked unless the room
+      // light is on. It runs alongside the challenges, not as a step.
+      requireLight: false
     },
 
     challenge: {
@@ -47,7 +50,7 @@ function defaults() {
         },
         thorough: {
           shuffle: false,
-          steps: [{ type: "camera" }, mathStep("+-x"), mathStep("+-x"), mathStep("+-x")]
+          steps: [{ type: "string", charset: "alnum", length: 8 }, mathStep("+-x"), mathStep("+-x"), mathStep("+-x")]
         },
         quick: {
           shuffle: false,
@@ -57,8 +60,7 @@ function defaults() {
       pool: {
         math: { weight: 3, operators: "+-x", maxOperand: 20 },
         string: { weight: 2, charset: "alnum", length: 8 },
-        memory: { weight: 1, length: 4 },
-        camera: { weight: 1 }
+        memory: { weight: 1, length: 4 }
       }
     },
 

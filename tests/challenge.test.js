@@ -40,8 +40,28 @@ function solve(state, rng) {
   return Challenge.submit(state, state.current.expected, rng).state;
 }
 
+// The camera is an optional gate now, not a default step, but the engine still
+// runs camera steps from custom presets. These tests keep a legacy preset
+// (camera + 3 math) and pool entry so that path stays covered.
+const LEGACY_CAMERA = {
+  challenge: {
+    // Config.merge replaces the whole presets map, so start from the full set.
+    presets: Object.assign({}, Config.defaults().challenge.presets, { thorough: { shuffle: false, steps: [{ type: 'camera' }, { type: 'math', operators: '+-x', maxOperand: 20, tier: 'easy' }, { type: 'math', operators: '+-x', maxOperand: 20, tier: 'easy' }, { type: 'math', operators: '+-x', maxOperand: 20, tier: 'easy' }] } }),
+    pool: Object.assign({}, Config.defaults().challenge.pool, { camera: { weight: 1 } })
+  }
+};
+
+function layer(a, b) {
+  const out = JSON.parse(JSON.stringify(a));
+  for (const k of Object.keys(b || {})) {
+    if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && out[k] && typeof out[k] === 'object') out[k] = layer(out[k], b[k]);
+    else out[k] = b[k];
+  }
+  return out;
+}
+
 function config(partial) {
-  return Config.merge(partial || {});
+  return Config.merge(layer(LEGACY_CAMERA, partial || {}));
 }
 
 test('Challenge.js imports Steps for QML', () => {
