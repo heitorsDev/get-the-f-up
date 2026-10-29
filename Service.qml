@@ -59,6 +59,9 @@ Item {
   property var _engine: null
   property var _resolved: null
   property string _exitReason: ""
+  // True once the challenge of the last session was completed; the CLI
+  // `disarm` command is only allowed after that.
+  property bool _lastChallengeDone: false
 
   signal ringing()
   signal finished(var record)
@@ -182,6 +185,23 @@ Item {
   function fail(message) {
     root.lastError = String(message || "unknown error")
     return { ok: false, error: root.lastError }
+  }
+
+  // A CLI payload is a JSON object; anything else is an error the caller
+  // sees instead of a silent default.
+  function parsePayload(text) {
+    var raw = text === undefined || text === null ? "" : String(text).trim()
+    if (raw === "") return { value: {}, error: "" }
+    var data
+    try {
+      data = JSON.parse(raw)
+    } catch (e) {
+      return { value: {}, error: "the payload is not valid JSON: " + e.message }
+    }
+    if (data === null || typeof data !== "object" || Array.isArray(data)) {
+      return { value: {}, error: "the payload must be a JSON object" }
+    }
+    return { value: data, error: "" }
   }
 
   // ---- the clock ------------------------------------------------------------
@@ -364,6 +384,7 @@ Item {
     if (!root.dryRun) record = History.makeRecord(root.session, exitAt, root._engine)
 
     root._exitReason = String(reason || "")
+    root._lastChallengeDone = !!(root._engine && root._engine.done === true)
     root._state = "idle"
     root.dryRun = false
     root.session = null
@@ -415,6 +436,50 @@ Item {
       out.progress = null
     }
     return out
+  }
+
+  // ---- the CLI target --------------------------------------------------------
+  // `omarchy-shell sleep-mode <method> [json]`
+  IpcHandler {
+    id: ipc
+    target: "sleep-mode"
+
+    function status(): string {
+      return JSON.stringify(root.statusJson())
+    }
+
+    function arm(payloadJson: string): string {
+      var payload = root.parsePayload(payloadJson)
+      if (payload.error) return JSON.stringify(root.fail(payload.error))
+      return JSON.stringify(root.arm(payload.value))
+    }
+
+    // Rejected unless every required challenge is done.
+    function disarm(): string {
+      var done = (root.challenge && root.challenge.done === true) || root._lastChallengeDone === true
+      if (!done) return JSON.stringify(root.fail("the challenge is not finished"))
+      if (root.state !== "idle") root.exitSession("disarmed")
+      return JSON.stringify(root.ok())
+    }
+
+    function open(payloadJson: string): string {
+      var payload = root.parsePayload(payloadJson)
+      if (payload.error) return JSON.stringify(root.fail(payload.error))
+      var mode = payload.value && payload.value.mode === "preview" ? "preview" : "sleep"
+      return JSON.stringify(root.openOverlay(mode))
+    }
+
+    function history(): string {
+      return JSON.stringify(History.recent(root.historyList, 10))
+    }
+
+    function preview(): string {
+      return JSON.stringify(root.startPreview())
+    }
+
+    function dryrun(): string {
+      return JSON.stringify(root.startDryRun({}))
+    }
   }
 
   Component.onCompleted: {
