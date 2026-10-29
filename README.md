@@ -7,12 +7,12 @@ Arm it with a time and a challenge. The screen goes black with a clock, the disp
 dims, and at the ring time an alarm sounds that only stops when you complete the
 challenge. You can also leave early by completing it.
 
-> **Status:** specification complete, not yet implemented. See
-> [`SPEC.md`](./SPEC.md) for the full design.
+> **Status:** in development. See [`SPEC.md`](./SPEC.md) for the full design and
+> [`docs/implementation-plan.md`](./docs/implementation-plan.md) for the phases.
 
 ---
 
-## What it will do
+## What it does
 
 - **Fullscreen sleep screen** on every monitor — black background, a large ticking
   clock, the ring time, and a live countdown. Claude Code TUI styling.
@@ -30,7 +30,7 @@ challenge. You can also leave early by completing it.
 
 ---
 
-## Install (once implemented)
+## Install
 
 ```bash
 omarchy plugin add https://github.com/heitorsDev/omarchy-sleep-mode.git --enable
@@ -44,6 +44,42 @@ omarchy plugin remove io.github.heitorsdev.sleep-mode
 
 Your settings (`~/.config/omarchy/sleep-mode/`) and history
 (`~/.local/state/omarchy/sleep-mode/`) are left in place; delete them by hand.
+
+---
+
+## CLI
+
+The plugin exposes a headless IPC target, so external bars and scripts can drive it:
+
+```bash
+omarchy-shell sleep-mode status
+omarchy-shell sleep-mode arm   '{"time":"07:30","challenge":"standard","reps":3}'
+omarchy-shell sleep-mode arm   '{"duration":"45m","challenge":"thorough","reps":2}'
+omarchy-shell sleep-mode open  '{}'
+omarchy-shell sleep-mode history
+omarchy-shell sleep-mode preview
+omarchy-shell sleep-mode dryrun
+```
+
+`disarm` is rejected unless the challenge is done — the point of the mode is that
+the only exits are N completed challenges or the crash watchdog.
+
+---
+
+## Configuration
+
+`~/.config/omarchy/sleep-mode/config.json` — every key has a default, so a partial
+file is valid. See [`SPEC.md`](./SPEC.md#16-configuration-reference) for the full
+reference.
+
+---
+
+## Development
+
+```bash
+npm test                # node --test tests/*.test.js
+omarchy plugin validate .
+```
 
 ---
 
