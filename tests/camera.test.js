@@ -88,3 +88,90 @@ test("the filter chain works in real ffmpeg on synthetic frames", { skip: spawnS
     assert.equal(r.variance, 0)
   }
 })
+
+// ---------------------------------------------------------- live preview
+
+test("liveCommand opens the camera once, writes only under the runtime dir and is capped", () => {
+  const cmd = Camera.liveCommand("/dev/video2", "/run/user/1000/", 3)
+  assert.equal(cmd[0], "bash")
+  const script = cmd[2]
+  assert.match(script, /exec timeout -k 2 "\$cap" ffmpeg/)
+  assert.match(script, /-atomic_writing 1 "\$dir\/preview\.jpg"/)
+  assert.match(script, /mkdir -p -m 700/)
+  assert.deepEqual(cmd.slice(4), ["/run/user/1000/omarchy-sleep-mode", "/dev/video2", "3", "600"])
+})
+
+test("liveCommand falls back to the default device and fps", () => {
+  const cmd = Camera.liveCommand("", "/tmp", undefined)
+  assert.deepEqual(cmd.slice(4), ["/tmp/omarchy-sleep-mode", "/dev/video0", "3", "600"])
+})
+
+test("previewFile and cleanupCommand share one directory", () => {
+  assert.equal(Camera.previewFile("/run/user/1000"), "/run/user/1000/omarchy-sleep-mode/preview.jpg")
+  assert.deepEqual(Camera.cleanupCommand("/run/user/1000"), ["rm", "-rf", "/run/user/1000/omarchy-sleep-mode"])
+})
+
+test("parseLiveLine reads the luma statistics and ignores everything else", () => {
+  assert.deepEqual(Camera.parseLiveLine("[Parsed_metadata_3 @ 0x7f] lavfi.signalstats.YAVG=106.233"),
+    { key: "YAVG", value: 106.233 })
+  assert.deepEqual(Camera.parseLiveLine("lavfi.signalstats.YLOW=17"), { key: "YLOW", value: 17 })
+  assert.deepEqual(Camera.parseLiveLine("lavfi.signalstats.YHIGH=136"), { key: "YHIGH", value: 136 })
+  assert.equal(Camera.parseLiveLine("lavfi.signalstats.UAVG=126.5"), null)
+  assert.equal(Camera.parseLiveLine("Input #0, video4linux2"), null)
+})
+
+test("liveErrorCode maps ffmpeg log lines to the same codes as one-shot capture", () => {
+  assert.equal(Camera.liveErrorCode("/dev/video0: Permission denied"), "EACCES")
+  assert.equal(Camera.liveErrorCode("/dev/video0: Device or resource busy"), "EBUSY")
+  assert.equal(Camera.liveErrorCode("/dev/video9: No such file or directory"), "ENOENT")
+  assert.equal(Camera.liveErrorCode("frame=3"), "")
+})
+
+test("verdict compares a live reading with the saved thresholds", () => {
+  const cfg = { lightThreshold: 60, nearBlackCutoff: 24 }
+  assert.equal(Camera.verdict(-1, -1, cfg), "unknown")
+  assert.equal(Camera.verdict(75, 100, cfg), "on")
+  assert.equal(Camera.verdict(60, 100, cfg), "on")
+  assert.equal(Camera.verdict(40, 100, cfg), "dim")
+  assert.equal(Camera.verdict(17, 0, cfg), "blocked")
+  // Dark but with real variance is an open lens in a dark room, not a block.
+  assert.equal(Camera.verdict(20, 60, cfg), "dim")
+})
+
+// ------------------------------------------------ race-free one-shot capture
+
+function withStubbedFfmpeg(script, run) {
+  const dir = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "sleep-mode-cam-"))
+  try {
+    const file = path.join(dir, "ffmpeg")
+    fs.writeFileSync(file, "#!/bin/bash\n" + script)
+    fs.chmodSync(file, 0o755)
+    return run({ PATH: dir + ":/usr/bin:/bin" })
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+}
+
+test("captureShellCommand puts stats and the exit code on one stream", () => {
+  withStubbedFfmpeg("echo '[x] lavfi.signalstats.YAVG=75.5' >&2\necho '[x] lavfi.signalstats.YHIGH=136' >&2\nexit 0\n", (env) => {
+    const cmd = Camera.captureShellCommand("/dev/video0", 15)
+    const res = spawnSync(cmd[0], cmd.slice(1), { env, encoding: "utf8" })
+    assert.equal(Camera.parseWrappedExit(res.stdout), 0)
+    const reading = Camera.reading(res.stdout, Camera.parseWrappedExit(res.stdout))
+    assert.equal(reading.luma, 75.5)
+    assert.equal(reading.error, null)
+  })
+})
+
+test("captureShellCommand reports a failing ffmpeg through the marker", () => {
+  withStubbedFfmpeg("echo '/dev/video0: Permission denied' >&2\nexit 1\n", (env) => {
+    const cmd = Camera.captureShellCommand("/dev/video0", 15)
+    const res = spawnSync(cmd[0], cmd.slice(1), { env, encoding: "utf8" })
+    const code = Camera.parseWrappedExit(res.stdout)
+    assert.equal(code, 1)
+    assert.equal(Camera.reading(res.stdout, code).error, "EACCES")
+  })
+})
+
+test("parseWrappedExit is null without the marker", () => {
+  assert.equal(Camera.parseWrappedExit("no marker here"), null)
+  assert.equal(Camera.parseWrappedExit("out\n@@exit=124\n"), 124)
+})

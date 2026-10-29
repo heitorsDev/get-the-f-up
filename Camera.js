@@ -13,6 +13,84 @@ var TIMEOUT_S = 10
 // "no measurable variance": a closed shutter reads a flat 16-17.
 var FLAT_SPREAD = 2
 
+// The live preview is the one exception to "nothing is written": while the
+// settings panel's preview button is on, frames go to a file in the user's
+// runtime dir (tmpfs, mode 0700) so the panel can show them. The file is
+// removed when the preview stops, and the stream is capped.
+var LIVE_FPS = 3
+var LIVE_CAP_S = 600
+
+function previewDir(runtimeDir) {
+  return String(runtimeDir || "/tmp").replace(/\/+$/, "") + "/omarchy-sleep-mode"
+}
+
+function previewFile(runtimeDir) {
+  return previewDir(runtimeDir) + "/preview.jpg"
+}
+
+// One process, one open of the camera: a scaled JPEG overwritten at LIVE_FPS,
+// plus signalstats lines on stderr (ffmpeg's log). `timeout` is the safety
+// net if the shell dies without stopping the stream.
+function liveCommand(device, runtimeDir, fps) {
+  var script = [
+    "dir=\"$1\"; dev=\"$2\"; fps=\"$3\"; cap=\"$4\"",
+    "mkdir -p -m 700 \"$dir\" || exit 1",
+    "exec timeout -k 2 \"$cap\" ffmpeg -hide_banner -nostdin -nostats -loglevel info " +
+      "-f v4l2 -input_format mjpeg -video_size 640x480 -framerate 15 -i \"$dev\" " +
+      "-vf \"fps=$fps,scale=320:-1,signalstats,metadata=print\" " +
+      "-q:v 6 -f image2 -update 1 -atomic_writing 1 \"$dir/preview.jpg\""
+  ].join("\n")
+  return ["bash", "-c", script, "sleep-mode-camera-live", previewDir(runtimeDir),
+    String(device || DEFAULT_DEVICE), String(fps || LIVE_FPS), String(LIVE_CAP_S)]
+}
+
+function cleanupCommand(runtimeDir) {
+  return ["rm", "-rf", previewDir(runtimeDir)]
+}
+
+// One ffmpeg log line -> { key: "YAVG", value: 75.8 } or null.
+function parseLiveLine(line) {
+  var m = /lavfi\.signalstats\.(YAVG|YLOW|YHIGH)=(-?[0-9.]+)/.exec(String(line || ""))
+  if (!m) return null
+  var v = parseFloat(m[2])
+  return isNaN(v) ? null : { key: m[1], value: v }
+}
+
+// An error code for one log line, or "" when the line is not an error.
+function liveErrorCode(line) {
+  var s = String(line || "")
+  if (/Permission denied/i.test(s)) return "EACCES"
+  if (/Device or resource busy/i.test(s)) return "EBUSY"
+  if (/No such file or directory/i.test(s)) return "ENOENT"
+  if (/Inappropriate ioctl|Not a video capture device|Invalid argument/i.test(s)) return "ENODEV"
+  return ""
+}
+
+// What a live reading means against the saved thresholds, for the readout:
+// "on" (the light check would pass), "dim" (too dark to pass) or "blocked"
+// (near-black and flat: the step would be skipped).
+function verdict(luma, spread, cameraConfig) {
+  if (luma === null || luma === undefined || Number(luma) < 0) return "unknown"
+  var cfg = cameraConfig || {}
+  var threshold = cfg.lightThreshold === undefined ? 60 : Number(cfg.lightThreshold)
+  if (isNearBlack({ luma: Number(luma), variance: Number(spread) < 0 ? null : Number(spread) }, cfg)) return "blocked"
+  return Number(luma) >= threshold ? "on" : "dim"
+}
+
+// One-shot capture whose output and exit code arrive on the same stream.
+// Reading the exit code from the Process `exited` signal races the output
+// collectors and can leave the text empty (parsed as ENODATA).
+function captureShellCommand(device, settleFrames) {
+  return ["bash", "-c", "\"$@\" 2>&1; echo \"@@exit=$?\"", "sleep-mode-camera"]
+    .concat(captureCommand(device, settleFrames))
+}
+
+// "...output\n@@exit=0" -> 0; null when the marker is missing.
+function parseWrappedExit(text) {
+  var m = /@@exit=(\d+)\s*$/.exec(String(text || ""))
+  return m ? parseInt(m[1], 10) : null
+}
+
 function captureCommand(device, settleFrames) {
   var n = settleFrames === undefined ? SETTLE_FRAMES : Math.max(0, Math.round(Number(settleFrames) || 0))
   return ["timeout", "-k", "2", String(TIMEOUT_S),
@@ -105,6 +183,17 @@ if (typeof module !== "undefined" && module.exports) {
     SETTLE_FRAMES: SETTLE_FRAMES,
     TIMEOUT_S: TIMEOUT_S,
     FLAT_SPREAD: FLAT_SPREAD,
+    LIVE_FPS: LIVE_FPS,
+    LIVE_CAP_S: LIVE_CAP_S,
+    previewDir: previewDir,
+    previewFile: previewFile,
+    liveCommand: liveCommand,
+    cleanupCommand: cleanupCommand,
+    parseLiveLine: parseLiveLine,
+    liveErrorCode: liveErrorCode,
+    verdict: verdict,
+    captureShellCommand: captureShellCommand,
+    parseWrappedExit: parseWrappedExit,
     captureCommand: captureCommand,
     parseSignalstats: parseSignalstats,
     parseYavg: parseYavg,
