@@ -70,6 +70,15 @@ Item {
   readonly property var session: root.service ? root.service.session : null
   readonly property var challengeView: root.service && root.service.challenge ? root.service.challenge : null
   readonly property string cameraStatus: root.service ? String(root.service.cameraStatus || "idle") : "idle"
+  // The camera step watches the light live (see Service.syncCameraWatch).
+  readonly property real cameraLuma: root.service && root.service.cameraLuma !== undefined ? Number(root.service.cameraLuma) : -1
+  readonly property real cameraProgress: root.service && root.service.cameraProgress !== undefined ? Number(root.service.cameraProgress) : 0
+  readonly property real cameraHold: root.service && root.service.cameraHold !== undefined ? Number(root.service.cameraHold) : 0
+  readonly property string cameraVerdict: root.service && root.service.cameraVerdict ? String(root.service.cameraVerdict) : "unknown"
+  readonly property string cameraFrame: root.service && root.service.cameraFrame ? String(root.service.cameraFrame) : ""
+  readonly property int cameraFrameSeq: root.service && root.service.cameraFrameSeq !== undefined ? Number(root.service.cameraFrameSeq) : 0
+  readonly property string cameraError: root.service && root.service.cameraLiveError ? String(root.service.cameraLiveError) : ""
+  readonly property int lightThreshold: config.camera && config.camera.lightThreshold !== undefined ? Number(config.camera.lightThreshold) : 60
   readonly property var lastResult: root.service ? root.service.lastResult : null
 
   property real localNow: Date.now()
@@ -125,8 +134,21 @@ Item {
     root.maybeFlashMemory()
   }
 
+  // The service only watches the camera while the challenge is on screen: not
+  // while the clock screen is up, and never in a preview.
+  readonly property bool challengeShown: root.opened && root.revealed && root.active && !root.previewing
+  onChallengeShownChanged: root.reportChallengeShown()
+  onServiceChanged: root.reportChallengeShown()
+
+  function reportChallengeShown() {
+    if (root.service && typeof root.service.setChallengeActive === "function") {
+      root.service.setChallengeActive(root.challengeShown)
+    }
+  }
+
   onLastResultChanged: {
-    if (!root.pendingCamera || !root.lastResult) return
+    var watching = root.service !== null && root.service.cameraWatching === true
+    if ((!root.pendingCamera && !watching) || !root.lastResult) return
     root.pendingCamera = false
     var r = root.lastResult
     if (r.skipped) {
@@ -356,10 +378,8 @@ Item {
       return
     }
 
-    if (root.currentType === "camera") {
-      if (isEnter || event.key === Qt.Key_Space) root.capture()
-      return
-    }
+    // The camera step has no input: it passes by itself when the light is on.
+    if (root.currentType === "camera") return
 
     if (root.inputLocked) return
 
@@ -428,7 +448,10 @@ Item {
     id: idleTimer
     interval: 60000
     onTriggered: {
-      if (root.draft === "" && !root.emergencyPrompt && !root.memoryVisible) root.revealed = false
+      // The camera step stays up: it has no typed draft, and hiding it would
+      // close the camera while the light is being switched on.
+      if (root.draft === "" && !root.emergencyPrompt && !root.memoryVisible
+          && root.currentType !== "camera") root.revealed = false
       else restart()
     }
   }

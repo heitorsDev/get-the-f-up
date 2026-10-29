@@ -8,7 +8,9 @@ import qs.Commons
 //
 // host contract (Overlay.qml):
 //   draft, wrongFlash, outcomeText, outcomeKind ("success"|"skip"|"error"|""),
-//   memoryVisible, inputLocked, capture(), submitDraft()
+//   memoryVisible, inputLocked, capture(), submitDraft(), and for the camera
+//   step: cameraFrame, cameraFrameSeq, cameraLuma, cameraProgress, cameraHold,
+//   cameraVerdict, cameraError, lightThreshold
 Item {
   id: root
 
@@ -26,6 +28,15 @@ Item {
   readonly property int completedSteps: view ? Number(view.completedSteps || 0) : 0
   readonly property int totalSteps: view ? Math.max(1, Number(view.totalSteps || 1)) : 1
   readonly property bool capturing: cameraStatus === "capturing"
+
+  readonly property string cameraMessage: {
+    var code = root.host ? String(root.host.cameraError) : ""
+    if (code === "EACCES") return "no permission to open the camera"
+    if (code === "EBUSY") return "another app is using the camera"
+    if (code === "ENOENT" || code === "ENODEV") return "no camera found"
+    if (code !== "") return code
+    return root.host && Number(root.host.cameraLuma) < 0 ? "opening the camera..." : ""
+  }
 
   readonly property string draft: host ? String(host.draft || "") : ""
   readonly property bool wrongFlash: host ? host.wrongFlash === true : false
@@ -143,7 +154,7 @@ Item {
           horizontalAlignment: Text.AlignHCenter
           wrapMode: Text.WordWrap
           textFormat: Text.PlainText
-          text: "get up, switch the room light on, then capture one frame.\nonly a brightness number is read; no image is ever saved."
+          text: "get up and switch the room light on. the step passes by itself once the light is bright enough.\nthe view is live only while this step is on screen."
           color: root.theme.dim
           font.family: root.theme.fontFamily
           font.pixelSize: Style.font.bodySmall
@@ -206,18 +217,30 @@ Item {
       }
     }
 
-    // ---- camera capture ----------------------------------------------------
-    Row {
+    // ---- camera: live view and light meter -----------------------------------
+    Column {
       visible: root.type === "camera"
+      width: Math.min(parent.width, Style.space(380))
       anchors.horizontalCenter: parent.horizontalCenter
-      spacing: Style.space(14)
+      spacing: Style.space(12)
 
-      Button {
+      CameraFrame {
+        width: parent.width
         theme: root.theme
-        kind: "accent"
-        text: root.capturing ? "capturing..." : "capture  [enter]"
-        enabled: !root.capturing
-        onClicked: if (root.host) root.host.capture()
+        url: root.host ? String(root.host.cameraFrame) : ""
+        seq: root.host ? Number(root.host.cameraFrameSeq) : 0
+        message: root.cameraMessage
+        messageIsError: root.host ? String(root.host.cameraError) !== "" : false
+      }
+
+      LightMeter {
+        width: parent.width
+        theme: root.theme
+        luma: root.host ? Number(root.host.cameraLuma) : -1
+        threshold: root.host ? Number(root.host.lightThreshold) : 60
+        progress: root.host ? Number(root.host.cameraProgress) : 0
+        hold: root.host ? Number(root.host.cameraHold) : 0
+        verdict: root.host ? String(root.host.cameraVerdict) : "unknown"
       }
     }
 
@@ -230,7 +253,7 @@ Item {
         if (root.wrongFlash) return "not quite"
         if (root.capturing) return "capturing one frame..."
         if (root.outcomeText !== "") return root.outcomeText
-        if (root.type === "camera") return "enter or click capture"
+        if (root.type === "camera") return "this step passes by itself"
         if (root.type === "memory" && root.memoryVisible) return "memorize; it hides in a moment"
         return "enter to submit  ·  ctrl+u to clear"
       }
