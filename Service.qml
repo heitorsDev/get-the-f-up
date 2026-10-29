@@ -49,6 +49,8 @@ Scope {
   readonly property string state: _state
   property string _state: "idle"
   property bool previewing: false
+  // Which screen the preview shows: "armed" or "ringing".
+  property string previewVariant: "armed"
   property bool dryRun: false
   property real now: 0
   property var config: Config.defaults()
@@ -284,8 +286,11 @@ Scope {
     return root.ok()
   }
 
-  function startPreview() {
+  // variant: "armed" (the idle sleep screen, the default) or "ringing" (the
+  // alarm screen). Either way nothing is dimmed, played or locked.
+  function startPreview(variant) {
     if (root.state !== "idle") return root.fail("sleep mode is already active")
+    root.previewVariant = variant === "ringing" ? "ringing" : "armed"
     root.previewing = true
     root.openOverlay("preview")
     return root.ok()
@@ -854,6 +859,10 @@ Scope {
 
     function preview(): string {
       return JSON.stringify(root.startPreview())
+    }
+
+    function previewalarm(): string {
+      return JSON.stringify(root.startPreview("ringing"))
     }
 
     function dryrun(): string {

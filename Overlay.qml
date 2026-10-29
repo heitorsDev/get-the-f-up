@@ -58,6 +58,7 @@ Item {
   readonly property string serviceState: root.service ? String(root.service.state || "idle") : "idle"
   readonly property bool active: serviceState === "armed" || serviceState === "ringing"
   readonly property bool ringing: serviceState === "ringing"
+    || (previewing && root.service !== null && root.service.previewVariant === "ringing")
   readonly property bool previewing: !active
     && (mode === "preview" || (root.service !== null && root.service.previewing === true))
   readonly property bool dryRun: root.service !== null && root.service.dryRun === true
@@ -75,7 +76,10 @@ Item {
   readonly property real now: root.service && root.service.now ? Number(root.service.now) : localNow
   property real previewRingAt: 0
   readonly property real ringAt: previewing ? previewRingAt : (session && session.ringAt ? Number(session.ringAt) : 0)
-  readonly property real ringingSince: session && session.ringingSince ? Number(session.ringingSince) : 0
+  // The alarm preview pretends it started ringing a little while ago.
+  property real previewRingingSince: 0
+  readonly property real ringingSince: previewing ? previewRingingSince
+    : (session && session.ringingSince ? Number(session.ringingSince) : 0)
 
   // The phrase the service expects for the emergency exit. The service may
   // publish its own via `emergencyPhrase`; otherwise this default is shown.
@@ -162,6 +166,7 @@ Item {
     var servicePreviewing = !root.active && root.service !== null && root.service.previewing === true
     root.mode = (payload.mode === "preview" || servicePreviewing) ? "preview" : "sleep"
     if (root.mode === "preview") root.previewRingAt = Date.now() + (6 * 60 + 15) * 60 * 1000
+    if (root.mode === "preview") root.previewRingingSince = Date.now() - (3 * 60 + 12) * 1000
     // A sleep-mode open while idle would be an undismissable black screen.
     // Refuse it; onActiveChanged opens us as soon as the mode is armed.
     if (root.mode === "sleep" && !root.active) {
