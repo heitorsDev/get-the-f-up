@@ -471,6 +471,8 @@ Item {
           theme: root.theme
           options: ["math", "string", "memory", "camera"]
           value: "math"
+          // Choice only reports the click; the owner keeps the value.
+          onChosen: function(chosen) { addStepChoice.value = chosen }
         }
 
         Button {
