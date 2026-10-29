@@ -35,6 +35,11 @@ Card {
   readonly property string verdict: Camera.verdict(root.luma, root.spread,
     { lightThreshold: root.threshold, nearBlackCutoff: root.cutoff })
 
+  // A keepLoaded service is not replaced by a plugin hot reload, so right
+  // after an update the panel can be newer than the service it talks to.
+  readonly property bool outdated: root.service !== null
+    && typeof root.service.startCameraLive !== "function"
+
   readonly property real scaleMin: 16
   readonly property real scaleMax: 235
 
@@ -62,7 +67,7 @@ Card {
   }
 
   function start() {
-    if (!root.service) return
+    if (!root.service || root.outdated) return
     root.wanted = true
     root.service.startCameraLive(root.device)
   }
@@ -109,14 +114,25 @@ Card {
         compact: true
         kind: root.wanted ? "normal" : "accent"
         text: root.wanted ? "hide preview" : "show preview"
-        enabled: root.service !== null
+        enabled: root.service !== null && !root.outdated
         onClicked: root.wanted ? root.stop() : root.start()
       }
     }
 
     Text {
       width: parent.width
-      visible: !root.wanted
+      visible: root.outdated
+      textFormat: Text.PlainText
+      text: "the running service is older than this panel. restart the shell to enable the preview: omarchy-restart-shell"
+      color: root.theme.error
+      font.family: root.theme.fontFamily
+      font.pixelSize: Style.font.caption
+      wrapMode: Text.WordWrap
+    }
+
+    Text {
+      width: parent.width
+      visible: !root.wanted && !root.outdated
       textFormat: Text.PlainText
       text: "the camera stays off until you press the button. frames are kept in memory-backed storage only while the preview is on, and deleted when it stops."
       color: root.theme.dim
