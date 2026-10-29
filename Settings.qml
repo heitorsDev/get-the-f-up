@@ -26,6 +26,11 @@ Item {
   property string statusText: ""
   property bool statusIsError: false
   property bool dirty: false
+  // Which section is open; opening one closes the others.
+  property string openSection: "test"
+
+  signal previewRequested(string variant)
+  signal dryRunRequested()
 
   readonly property var presets: root.draft.challenge && root.draft.challenge.presets
     ? root.draft.challenge.presets : ({})
@@ -254,663 +259,736 @@ Item {
     width: parent.width
     spacing: Style.space(16)
 
-    // ---- presets ----------------------------------------------------------
-    SectionHeader {
+    // ---- test -------------------------------------------------------------
+    Section {
       width: parent.width
       theme: root.theme
-      text: "challenges"
-    }
+      title: "preview and test"
+      summary: "see the idle and alarm screens"
+      expanded: root.openSection === "test"
+      onToggled: root.openSection = root.openSection === "test" ? "" : "test"
 
-    Text {
-      width: parent.width
-      wrapMode: Text.WordWrap
-      textFormat: Text.PlainText
-      text: "The default preset is what the arming dialog starts on. N counts whole challenges: every step of a preset has to be solved N times before the screen lets go."
-      color: root.theme.dim
-      font.family: root.theme.fontFamily
-      font.pixelSize: Style.font.caption
-    }
-
-    Choice {
-      width: parent.width
-      theme: root.theme
-      options: root.presetNames
-      value: root.strAt("challenge.defaultPreset", "")
-      onChosen: function(value) { root.setPath("challenge.defaultPreset", String(value)) }
-    }
-
-    Spinner {
-      width: parent.width
-      theme: root.theme
-      label: "default challenges required"
-      value: root.numAt("challenge.reps", 1)
-      from: 1
-      to: 10
-      onModified: function(value) { root.setPath("challenge.reps", value) }
-    }
-
-    SectionHeader {
-      width: parent.width
-      theme: root.theme
-      text: "presets"
-    }
-
-    Item {
-      id: presetRow
-      width: parent.width
-      height: Math.max(presetChoice.implicitHeight, Style.space(30))
-
-      Choice {
-        id: presetChoice
-        anchors.left: parent.left
-        anchors.right: presetActions.left
-        anchors.rightMargin: Style.space(8)
-        anchors.verticalCenter: parent.verticalCenter
-        theme: root.theme
-        options: root.presetNames
-        value: root.selectedPreset
-        onChosen: function(value) { root.selectedPreset = String(value) }
+      Text {
+        width: parent.width
+        textFormat: Text.PlainText
+        text: "see the sleep screen before you rely on it. previews change nothing: no dimming, no sound, no lock, the camera stays off. a dry run is the real thing for 10 seconds."
+        color: root.theme.dim
+        font.family: root.theme.fontFamily
+        font.pixelSize: Style.font.caption
+        wrapMode: Text.WordWrap
       }
 
-      Row {
-        id: presetActions
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Style.space(6)
+      Flow {
+        width: parent.width
+        spacing: Style.space(8)
 
         Button {
           theme: root.theme
-          compact: true
-          kind: "danger"
-          text: "delete"
-          enabled: root.selectedPreset !== ""
-          onClicked: root.deleteSelectedPreset()
+          kind: "accent"
+          text: "preview idle screen"
+          tooltip: "the clock and countdown while waiting for the alarm"
+          onClicked: root.previewRequested("armed")
         }
-      }
-    }
 
-    Item {
-      id: newPresetRow
-      width: parent.width
-      height: Math.max(newPresetField.implicitHeight, Style.space(30))
-
-      LabeledField {
-        id: newPresetField
-        anchors.left: parent.left
-        anchors.right: addPresetButton.left
-        anchors.rightMargin: Style.space(8)
-        theme: root.theme
-        label: "new preset"
-        placeholder: "late shift"
-        text: root.newPresetName
-        onEdited: function(value) { root.newPresetName = value }
-      }
-
-      Button {
-        id: addPresetButton
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        theme: root.theme
-        text: "add"
-        onClicked: root.addPreset()
-      }
-    }
-
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "shuffle: draw the steps from the pool instead of using this list"
-      hint: "a shuffled preset keeps its step count and picks each step at random, weighted by the pool"
-      checked: root.presets[root.selectedPreset] ? root.presets[root.selectedPreset].shuffle === true : false
-      onToggled: function(value) {
-        var preset = root.presets[root.selectedPreset]
-        if (!preset) return
-        root.presets[root.selectedPreset] = { shuffle: value, steps: preset.steps ? preset.steps : [] }
-        root.touch()
-      }
-    }
-
-    SectionHeader {
-      width: parent.width
-      theme: root.theme
-      text: "steps"
-    }
-
-    Repeater {
-      model: root.stepCount
-
-      Card {
-        id: stepCard
-        required property int index
-
-        width: parent.width
-        height: stepEditor.implicitHeight + Style.space(16) * 2
-
-        StepEditor {
-          id: stepEditor
-          anchors.left: parent.left
-          anchors.right: parent.right
-          anchors.top: parent.top
-          anchors.margins: Style.space(16)
+        Button {
           theme: root.theme
-          spec: root.currentSteps[stepCard.index]
-          showListActions: true
-          onChanged: function(spec) { root.setStep(stepCard.index, spec) }
-          onMoveUpRequested: root.moveStep(stepCard.index, -1)
-          onMoveDownRequested: root.moveStep(stepCard.index, 1)
-          onRemoveRequested: root.removeStep(stepCard.index)
+          kind: "accent"
+          text: "preview alarm screen"
+          tooltip: "WAKE UP, as it looks once the alarm rings"
+          onClicked: root.previewRequested("ringing")
+        }
+
+        Button {
+          theme: root.theme
+          kind: "danger"
+          text: "dry run"
+          tooltip: "dims the display and plays the alarm for real, then restores everything"
+          onClicked: root.dryRunRequested()
         }
       }
     }
 
-    Item {
-      id: addStepRow
+    // ---- presets ----------------------------------------------------------
+    Section {
       width: parent.width
-      height: Math.max(addStepChoice.implicitHeight, Style.space(30))
+      theme: root.theme
+      title: "challenges"
+      summary: "presets, steps, pool"
+      expanded: root.openSection === "challenges"
+      onToggled: root.openSection = root.openSection === "challenges" ? "" : "challenges"
+
+      Text {
+        width: parent.width
+        wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
+        text: "The default preset is what the arming dialog starts on. N counts whole challenges: every step of a preset has to be solved N times before the screen lets go."
+        color: root.theme.dim
+        font.family: root.theme.fontFamily
+        font.pixelSize: Style.font.caption
+      }
 
       Choice {
-        id: addStepChoice
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        theme: root.theme
-        options: ["math", "string", "memory", "camera"]
-        value: "math"
-      }
-
-      Button {
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        theme: root.theme
-        text: "add step"
-        enabled: root.selectedPreset !== ""
-        onClicked: root.addStep(String(addStepChoice.value))
-      }
-    }
-
-    SectionHeader {
-      width: parent.width
-      theme: root.theme
-      text: "pool"
-    }
-
-    Text {
-      width: parent.width
-      wrapMode: Text.WordWrap
-      textFormat: Text.PlainText
-      text: "The pool is where a shuffled preset draws its steps from. The weight is how often a type is picked relative to the others."
-      color: root.theme.dim
-      font.family: root.theme.fontFamily
-      font.pixelSize: Style.font.caption
-    }
-
-    Repeater {
-      model: root.poolTypes.length
-
-      Card {
-        id: poolCard
-        required property int index
-
         width: parent.width
-        height: poolEditor.implicitHeight + Style.space(16) * 2
+        theme: root.theme
+        options: root.presetNames
+        value: root.strAt("challenge.defaultPreset", "")
+        onChosen: function(value) { root.setPath("challenge.defaultPreset", String(value)) }
+      }
 
-        StepEditor {
-          id: poolEditor
+      Spinner {
+        width: parent.width
+        theme: root.theme
+        label: "default challenges required"
+        value: root.numAt("challenge.reps", 1)
+        from: 1
+        to: 10
+        onModified: function(value) { root.setPath("challenge.reps", value) }
+      }
+
+      SectionHeader {
+        width: parent.width
+        theme: root.theme
+        text: "presets"
+      }
+
+      Item {
+        id: presetRow
+        width: parent.width
+        height: Math.max(presetChoice.implicitHeight, Style.space(30))
+
+        Choice {
+          id: presetChoice
           anchors.left: parent.left
-          anchors.right: parent.right
-          anchors.top: parent.top
-          anchors.margins: Style.space(16)
+          anchors.right: presetActions.left
+          anchors.rightMargin: Style.space(8)
+          anchors.verticalCenter: parent.verticalCenter
           theme: root.theme
-          spec: root.poolSpec(root.poolTypes[poolCard.index])
-          showWeight: true
-          weight: root.numAt("challenge.pool." + root.poolTypes[poolCard.index] + ".weight", 1)
-          onChanged: function(spec) { root.setPoolSpec(root.poolTypes[poolCard.index], spec) }
-          onWeightEdited: function(value) { root.setPoolWeight(root.poolTypes[poolCard.index], value) }
+          options: root.presetNames
+          value: root.selectedPreset
+          onChosen: function(value) { root.selectedPreset = String(value) }
+        }
+
+        Row {
+          id: presetActions
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: Style.space(6)
+
+          Button {
+            theme: root.theme
+            compact: true
+            kind: "danger"
+            text: "delete"
+            enabled: root.selectedPreset !== ""
+            onClicked: root.deleteSelectedPreset()
+          }
+        }
+      }
+
+      Item {
+        id: newPresetRow
+        width: parent.width
+        height: Math.max(newPresetField.implicitHeight, Style.space(30))
+
+        LabeledField {
+          id: newPresetField
+          anchors.left: parent.left
+          anchors.right: addPresetButton.left
+          anchors.rightMargin: Style.space(8)
+          theme: root.theme
+          label: "new preset"
+          placeholder: "late shift"
+          text: root.newPresetName
+          onEdited: function(value) { root.newPresetName = value }
+        }
+
+        Button {
+          id: addPresetButton
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          theme: root.theme
+          text: "add"
+          onClicked: root.addPreset()
+        }
+      }
+
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "shuffle: draw the steps from the pool instead of using this list"
+        hint: "a shuffled preset keeps its step count and picks each step at random, weighted by the pool"
+        checked: root.presets[root.selectedPreset] ? root.presets[root.selectedPreset].shuffle === true : false
+        onToggled: function(value) {
+          var preset = root.presets[root.selectedPreset]
+          if (!preset) return
+          root.presets[root.selectedPreset] = { shuffle: value, steps: preset.steps ? preset.steps : [] }
+          root.touch()
+        }
+      }
+
+      SectionHeader {
+        width: parent.width
+        theme: root.theme
+        text: "steps"
+      }
+
+      Repeater {
+        model: root.stepCount
+
+        Card {
+          id: stepCard
+          required property int index
+
+          width: parent.width
+          height: stepEditor.implicitHeight + Style.space(16) * 2
+
+          StepEditor {
+            id: stepEditor
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Style.space(16)
+            theme: root.theme
+            spec: root.currentSteps[stepCard.index]
+            showListActions: true
+            onChanged: function(spec) { root.setStep(stepCard.index, spec) }
+            onMoveUpRequested: root.moveStep(stepCard.index, -1)
+            onMoveDownRequested: root.moveStep(stepCard.index, 1)
+            onRemoveRequested: root.removeStep(stepCard.index)
+          }
+        }
+      }
+
+      Item {
+        id: addStepRow
+        width: parent.width
+        height: Math.max(addStepChoice.implicitHeight, Style.space(30))
+
+        Choice {
+          id: addStepChoice
+          anchors.left: parent.left
+          anchors.verticalCenter: parent.verticalCenter
+          theme: root.theme
+          options: ["math", "string", "memory", "camera"]
+          value: "math"
+        }
+
+        Button {
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          theme: root.theme
+          text: "add step"
+          enabled: root.selectedPreset !== ""
+          onClicked: root.addStep(String(addStepChoice.value))
+        }
+      }
+
+      SectionHeader {
+        width: parent.width
+        theme: root.theme
+        text: "pool"
+      }
+
+      Text {
+        width: parent.width
+        wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
+        text: "The pool is where a shuffled preset draws its steps from. The weight is how often a type is picked relative to the others."
+        color: root.theme.dim
+        font.family: root.theme.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+
+      Repeater {
+        model: root.poolTypes.length
+
+        Card {
+          id: poolCard
+          required property int index
+
+          width: parent.width
+          height: poolEditor.implicitHeight + Style.space(16) * 2
+
+          StepEditor {
+            id: poolEditor
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Style.space(16)
+            theme: root.theme
+            spec: root.poolSpec(root.poolTypes[poolCard.index])
+            showWeight: true
+            weight: root.numAt("challenge.pool." + root.poolTypes[poolCard.index] + ".weight", 1)
+            onChanged: function(spec) { root.setPoolSpec(root.poolTypes[poolCard.index], spec) }
+            onWeightEdited: function(value) { root.setPoolWeight(root.poolTypes[poolCard.index], value) }
+          }
         }
       }
     }
 
     // ---- display ----------------------------------------------------------
-    SectionHeader {
+    Section {
       width: parent.width
       theme: root.theme
-      text: "display"
-    }
+      title: "display"
+      summary: "dimming"
+      expanded: root.openSection === "display"
+      onToggled: root.openSection = root.openSection === "display" ? "" : "display"
 
-    Text {
-      width: parent.width
-      wrapMode: Text.WordWrap
-      textFormat: Text.PlainText
-      text: "Only gamma dimming is supported: the HDMI monitor has no DDC/CI, so hyprsunset is the one dimming that reaches both screens."
-      color: root.theme.dim
-      font.family: root.theme.fontFamily
-      font.pixelSize: Style.font.caption
-    }
+      Text {
+        width: parent.width
+        wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
+        text: "Only gamma dimming is supported: the HDMI monitor has no DDC/CI, so hyprsunset is the one dimming that reaches both screens."
+        color: root.theme.dim
+        font.family: root.theme.fontFamily
+        font.pixelSize: Style.font.caption
+      }
 
-    Spinner {
-      width: parent.width
-      theme: root.theme
-      label: "gamma while sleeping"
-      hint: "hyprsunset gamma level in percent"
-      value: root.numAt("display.gammaPercent", 50)
-      from: 1
-      to: 100
-      suffix: "%"
-      onModified: function(value) { root.setPath("display.gammaPercent", value) }
-    }
+      Spinner {
+        width: parent.width
+        theme: root.theme
+        label: "gamma while sleeping"
+        hint: "hyprsunset gamma level in percent"
+        value: root.numAt("display.gammaPercent", 50)
+        from: 1
+        to: 100
+        suffix: "%"
+        onModified: function(value) { root.setPath("display.gammaPercent", value) }
+      }
 
-    Spinner {
-      width: parent.width
-      theme: root.theme
-      label: "laptop backlight"
-      hint: "left alone under gamma-only dimming"
-      value: root.numAt("display.laptopBacklightPercent", 100)
-      from: 1
-      to: 100
-      suffix: "%"
-      onModified: function(value) { root.setPath("display.laptopBacklightPercent", value) }
-    }
+      Spinner {
+        width: parent.width
+        theme: root.theme
+        label: "laptop backlight"
+        hint: "left alone under gamma-only dimming"
+        value: root.numAt("display.laptopBacklightPercent", 100)
+        from: 1
+        to: 100
+        suffix: "%"
+        onModified: function(value) { root.setPath("display.laptopBacklightPercent", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "restore the previous brightness on exit"
-      checked: root.boolAt("display.restoreBrightness", true)
-      onToggled: function(value) { root.setPath("display.restoreBrightness", value) }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "restore the previous brightness on exit"
+        checked: root.boolAt("display.restoreBrightness", true)
+        onToggled: function(value) { root.setPath("display.restoreBrightness", value) }
+      }
     }
 
     // ---- audio ------------------------------------------------------------
-    SectionHeader {
+    Section {
       width: parent.width
       theme: root.theme
-      text: "audio"
-    }
+      title: "audio"
+      summary: "alarm sound and volume"
+      expanded: root.openSection === "audio"
+      onToggled: root.openSection = root.openSection === "audio" ? "" : "audio"
 
-    LabeledField {
-      width: parent.width
-      theme: root.theme
-      label: "alarm sound"
-      hint: "leave empty for the bundled alarm"
-      placeholder: "/path/to/alarm.oga"
-      text: root.strAt("audio.soundPath", "")
-      onEdited: function(value) { root.setPath("audio.soundPath", value === "" ? null : value) }
-    }
+      LabeledField {
+        width: parent.width
+        theme: root.theme
+        label: "alarm sound"
+        hint: "leave empty for the bundled alarm"
+        placeholder: "/path/to/alarm.oga"
+        text: root.strAt("audio.soundPath", "")
+        onEdited: function(value) { root.setPath("audio.soundPath", value === "" ? null : value) }
+      }
 
-    LabeledField {
-      width: parent.width
-      theme: root.theme
-      label: "sink"
-      hint: "leave empty for the current default sink"
-      placeholder: "alsa_output.pci-0000_00_1f.3.analog-stereo"
-      text: root.strAt("audio.sink", "")
-      onEdited: function(value) { root.setPath("audio.sink", value === "" ? null : value) }
-    }
+      LabeledField {
+        width: parent.width
+        theme: root.theme
+        label: "sink"
+        hint: "leave empty for the current default sink"
+        placeholder: "alsa_output.pci-0000_00_1f.3.analog-stereo"
+        text: root.strAt("audio.sink", "")
+        onEdited: function(value) { root.setPath("audio.sink", value === "" ? null : value) }
+      }
 
-    Spinner {
-      width: parent.width
-      theme: root.theme
-      label: "volume at ring time"
-      hint: "the alarm forces this volume so it is always audible"
-      value: root.numAt("audio.volumePercent", 80)
-      from: 1
-      to: 100
-      suffix: "%"
-      onModified: function(value) { root.setPath("audio.volumePercent", value) }
-    }
+      Spinner {
+        width: parent.width
+        theme: root.theme
+        label: "volume at ring time"
+        hint: "the alarm forces this volume so it is always audible"
+        value: root.numAt("audio.volumePercent", 80)
+        from: 1
+        to: 100
+        suffix: "%"
+        onModified: function(value) { root.setPath("audio.volumePercent", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "unmute at ring time"
-      checked: root.boolAt("audio.unmute", true)
-      onToggled: function(value) { root.setPath("audio.unmute", value) }
-    }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "unmute at ring time"
+        checked: root.boolAt("audio.unmute", true)
+        onToggled: function(value) { root.setPath("audio.unmute", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "restore the previous volume on exit"
-      checked: root.boolAt("audio.restoreVolume", true)
-      onToggled: function(value) { root.setPath("audio.restoreVolume", value) }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "restore the previous volume on exit"
+        checked: root.boolAt("audio.restoreVolume", true)
+        onToggled: function(value) { root.setPath("audio.restoreVolume", value) }
+      }
     }
 
     // ---- camera -----------------------------------------------------------
-    SectionHeader {
+    Section {
       width: parent.width
       theme: root.theme
-      text: "camera"
-    }
+      title: "camera"
+      summary: "light check"
+      expanded: root.openSection === "camera"
+      onToggled: root.openSection = root.openSection === "camera" ? "" : "camera"
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "camera steps enabled"
-      hint: "the camera proves the room light is on; it never stores an image"
-      checked: root.boolAt("camera.enabled", true)
-      onToggled: function(value) { root.setPath("camera.enabled", value) }
-    }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "camera steps enabled"
+        hint: "the camera proves the room light is on; it never stores an image"
+        checked: root.boolAt("camera.enabled", true)
+        onToggled: function(value) { root.setPath("camera.enabled", value) }
+      }
 
-    LabeledField {
-      width: parent.width
-      theme: root.theme
-      label: "device"
-      placeholder: "/dev/video0"
-      text: root.strAt("camera.device", "")
-      onEdited: function(value) { root.setPath("camera.device", value) }
-    }
+      LabeledField {
+        width: parent.width
+        theme: root.theme
+        label: "device"
+        placeholder: "/dev/video0"
+        text: root.strAt("camera.device", "")
+        onEdited: function(value) { root.setPath("camera.device", value) }
+      }
 
-    CameraPreview {
-      id: cameraPreview
-      width: parent.width
-      theme: root.theme
-      service: root.service
-      device: root.strAt("camera.device", "")
-      threshold: root.numAt("camera.lightThreshold", 60)
-      cutoff: root.numAt("camera.nearBlackCutoff", 24)
-      onThresholdPicked: function(value) { root.setPath("camera.lightThreshold", value) }
-    }
+      CameraPreview {
+        id: cameraPreview
+        width: parent.width
+        theme: root.theme
+        service: root.service
+        device: root.strAt("camera.device", "")
+        threshold: root.numAt("camera.lightThreshold", 60)
+        cutoff: root.numAt("camera.nearBlackCutoff", 24)
+        onThresholdPicked: function(value) { root.setPath("camera.lightThreshold", value) }
+      }
 
-    NumberField {
-      width: parent.width
-      theme: root.theme
-      label: "light threshold"
-      hint: "mean luma that counts as the light being on (16 = black, 235 = white)"
-      value: root.numAt("camera.lightThreshold", 60)
-      from: 0
-      to: 235
-      onModified: function(value) { root.setPath("camera.lightThreshold", value) }
-    }
+      NumberField {
+        width: parent.width
+        theme: root.theme
+        label: "light threshold"
+        hint: "mean luma that counts as the light being on (16 = black, 235 = white)"
+        value: root.numAt("camera.lightThreshold", 60)
+        from: 0
+        to: 235
+        onModified: function(value) { root.setPath("camera.lightThreshold", value) }
+      }
 
-    NumberField {
-      width: parent.width
-      theme: root.theme
-      label: "near-black cutoff"
-      hint: "below this the camera counts as unusable and the step is skipped"
-      value: root.numAt("camera.nearBlackCutoff", 24)
-      from: 0
-      to: 100
-      onModified: function(value) { root.setPath("camera.nearBlackCutoff", value) }
-    }
+      NumberField {
+        width: parent.width
+        theme: root.theme
+        label: "near-black cutoff"
+        hint: "below this the camera counts as unusable and the step is skipped"
+        value: root.numAt("camera.nearBlackCutoff", 24)
+        from: 0
+        to: 100
+        onModified: function(value) { root.setPath("camera.nearBlackCutoff", value) }
+      }
 
-    Spinner {
-      width: parent.width
-      theme: root.theme
-      label: "auto-skip after failures"
-      hint: "0 never auto-skips a camera step that keeps failing"
-      value: root.numAt("camera.autoSkipAfterFailures", 3)
-      from: 0
-      to: 10
-      onModified: function(value) { root.setPath("camera.autoSkipAfterFailures", value) }
-    }
+      Spinner {
+        width: parent.width
+        theme: root.theme
+        label: "auto-skip after failures"
+        hint: "0 never auto-skips a camera step that keeps failing"
+        value: root.numAt("camera.autoSkipAfterFailures", 3)
+        from: 0
+        to: 10
+        onModified: function(value) { root.setPath("camera.autoSkipAfterFailures", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "warn when arming if the camera looks blocked"
-      checked: root.boolAt("camera.warnOnArm", true)
-      onToggled: function(value) { root.setPath("camera.warnOnArm", value) }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "warn when arming if the camera looks blocked"
+        checked: root.boolAt("camera.warnOnArm", true)
+        onToggled: function(value) { root.setPath("camera.warnOnArm", value) }
+      }
     }
 
     // ---- lockdown ---------------------------------------------------------
-    SectionHeader {
+    Section {
       width: parent.width
       theme: root.theme
-      text: "lockdown"
-    }
+      title: "lockdown"
+      summary: "what is blocked"
+      expanded: root.openSection === "lockdown"
+      onToggled: root.openSection = root.openSection === "lockdown" ? "" : "lockdown"
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "cover all monitors"
-      checked: root.boolAt("lockdown.coverAllMonitors", true)
-      onToggled: function(value) { root.setPath("lockdown.coverAllMonitors", value) }
-    }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "cover all monitors"
+        checked: root.boolAt("lockdown.coverAllMonitors", true)
+        onToggled: function(value) { root.setPath("lockdown.coverAllMonitors", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "exclusive keyboard focus"
-      checked: root.boolAt("lockdown.exclusiveKeyboard", true)
-      onToggled: function(value) { root.setPath("lockdown.exclusiveKeyboard", value) }
-    }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "exclusive keyboard focus"
+        checked: root.boolAt("lockdown.exclusiveKeyboard", true)
+        onToggled: function(value) { root.setPath("lockdown.exclusiveKeyboard", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "suppress notifications"
-      checked: root.boolAt("lockdown.suppressNotifications", true)
-      onToggled: function(value) { root.setPath("lockdown.suppressNotifications", value) }
-    }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "suppress notifications"
+        checked: root.boolAt("lockdown.suppressNotifications", true)
+        onToggled: function(value) { root.setPath("lockdown.suppressNotifications", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "pause other media"
-      checked: root.boolAt("lockdown.pauseMedia", true)
-      onToggled: function(value) { root.setPath("lockdown.pauseMedia", value) }
-    }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "pause other media"
+        checked: root.boolAt("lockdown.pauseMedia", true)
+        onToggled: function(value) { root.setPath("lockdown.pauseMedia", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "hide the bar"
-      checked: root.boolAt("lockdown.hideBar", true)
-      onToggled: function(value) { root.setPath("lockdown.hideBar", value) }
-    }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "hide the bar"
+        checked: root.boolAt("lockdown.hideBar", true)
+        onToggled: function(value) { root.setPath("lockdown.hideBar", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "block window and workspace switching"
-      checked: root.boolAt("lockdown.blockWindowSwitching", true)
-      onToggled: function(value) { root.setPath("lockdown.blockWindowSwitching", value) }
-    }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "block window and workspace switching"
+        checked: root.boolAt("lockdown.blockWindowSwitching", true)
+        onToggled: function(value) { root.setPath("lockdown.blockWindowSwitching", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "suppress the idle screensaver and lock"
-      checked: root.boolAt("lockdown.suppressIdle", true)
-      onToggled: function(value) { root.setPath("lockdown.suppressIdle", value) }
-    }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "suppress the idle screensaver and lock"
+        checked: root.boolAt("lockdown.suppressIdle", true)
+        onToggled: function(value) { root.setPath("lockdown.suppressIdle", value) }
+      }
 
-    Spinner {
-      width: parent.width
-      theme: root.theme
-      label: "maximum duration"
-      hint: "in minutes; 0 means no cap at all"
-      value: root.numAt("lockdown.maxDurationMinutes", 0)
-      from: 0
-      to: 1440
-      zeroText: "off"
-      onModified: function(value) { root.setPath("lockdown.maxDurationMinutes", value) }
+      Spinner {
+        width: parent.width
+        theme: root.theme
+        label: "maximum duration"
+        hint: "in minutes; 0 means no cap at all"
+        value: root.numAt("lockdown.maxDurationMinutes", 0)
+        from: 0
+        to: 1440
+        zeroText: "off"
+        onModified: function(value) { root.setPath("lockdown.maxDurationMinutes", value) }
+      }
     }
 
     // ---- appearance -------------------------------------------------------
-    SectionHeader {
+    Section {
       width: parent.width
       theme: root.theme
-      text: "appearance"
-    }
+      title: "appearance"
+      summary: "colors and clock"
+      expanded: root.openSection === "appearance"
+      onToggled: root.openSection = root.openSection === "appearance" ? "" : "appearance"
 
-    Choice {
-      theme: root.theme
-      options: [
-        { value: "theme", label: "omarchy theme" },
-        { value: "claude", label: "claude code" }
-      ]
-      value: root.strAt("ui.palette", "theme")
-      onChosen: function(value) { root.setPath("ui.palette", String(value)) }
-    }
-
-    Card {
-      width: parent.width
-      height: Style.space(110)
-      theme: root.theme
-
-      SleepScreen {
-        anchors.centerIn: parent
-        theme: draftTheme
-        now: Date.now()
-        ringAt: 0
-        sizeScale: 0.26
+      Choice {
+        theme: root.theme
+        options: [
+          { value: "theme", label: "omarchy theme" },
+          { value: "claude", label: "claude code" }
+        ]
+        value: root.strAt("ui.palette", "theme")
+        onChosen: function(value) { root.setPath("ui.palette", String(value)) }
       }
-    }
 
-    LabeledField {
-      width: parent.width
-      theme: root.theme
-      label: "font family"
-      placeholder: "JetBrainsMono Nerd Font"
-      text: root.strAt("ui.fontFamily", "")
-      onEdited: function(value) { root.setPath("ui.fontFamily", value) }
-    }
+      Card {
+        width: parent.width
+        height: Style.space(110)
+        theme: root.theme
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "24-hour clock"
-      checked: root.boolAt("ui.clock24h", true)
-      onToggled: function(value) { root.setPath("ui.clock24h", value) }
-    }
+        SleepScreen {
+          anchors.centerIn: parent
+          theme: draftTheme
+          now: Date.now()
+          ringAt: 0
+          sizeScale: 0.26
+        }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "show seconds"
-      checked: root.boolAt("ui.showSeconds", true)
-      onToggled: function(value) { root.setPath("ui.showSeconds", value) }
-    }
-
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "show the ring time"
-      checked: root.boolAt("ui.showRingTime", true)
-      onToggled: function(value) { root.setPath("ui.showRingTime", value) }
-    }
-
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "show the countdown"
-      checked: root.boolAt("ui.showCountdown", true)
-      onToggled: function(value) { root.setPath("ui.showCountdown", value) }
-    }
-
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "show the date"
-      checked: root.boolAt("ui.showDate", false)
-      onToggled: function(value) { root.setPath("ui.showDate", value) }
-    }
-
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "pulse the border while the alarm rings"
-      hint: "off by default: a slow pulse is nice, a strobe is not"
-      checked: root.boolAt("ui.pulseOnRing", false)
-      onToggled: function(value) { root.setPath("ui.pulseOnRing", value) }
-    }
-
-    SectionHeader {
-      width: parent.width
-      theme: root.theme
-      text: "claude palette"
-    }
-
-    Repeater {
-      model: Palette.TOKENS
-
-      ColorField {
-        id: colorRow
-        required property var modelData
-
+      LabeledField {
         width: parent.width
         theme: root.theme
-        token: String(colorRow.modelData)
-        value: root.strAt("ui.claudePalette." + String(colorRow.modelData), "")
-        onColorEdited: function(token, value) { root.setPath("ui.claudePalette." + token, value) }
+        label: "font family"
+        placeholder: "JetBrainsMono Nerd Font"
+        text: root.strAt("ui.fontFamily", "")
+        onEdited: function(value) { root.setPath("ui.fontFamily", value) }
       }
-    }
 
-    Button {
-      theme: root.theme
-      text: "reset the claude palette"
-      onClicked: {
-        var preset = Palette.claudePreset()
-        for (var key in preset) {
-          if (preset.hasOwnProperty(key)) root.setPath("ui.claudePalette." + key, preset[key])
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "24-hour clock"
+        checked: root.boolAt("ui.clock24h", true)
+        onToggled: function(value) { root.setPath("ui.clock24h", value) }
+      }
+
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "show seconds"
+        checked: root.boolAt("ui.showSeconds", true)
+        onToggled: function(value) { root.setPath("ui.showSeconds", value) }
+      }
+
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "show the ring time"
+        checked: root.boolAt("ui.showRingTime", true)
+        onToggled: function(value) { root.setPath("ui.showRingTime", value) }
+      }
+
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "show the countdown"
+        checked: root.boolAt("ui.showCountdown", true)
+        onToggled: function(value) { root.setPath("ui.showCountdown", value) }
+      }
+
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "show the date"
+        checked: root.boolAt("ui.showDate", false)
+        onToggled: function(value) { root.setPath("ui.showDate", value) }
+      }
+
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "pulse the border while the alarm rings"
+        hint: "off by default: a slow pulse is nice, a strobe is not"
+        checked: root.boolAt("ui.pulseOnRing", false)
+        onToggled: function(value) { root.setPath("ui.pulseOnRing", value) }
+      }
+
+      SectionHeader {
+        width: parent.width
+        theme: root.theme
+        text: "claude palette"
+      }
+
+      Repeater {
+        model: Palette.TOKENS
+
+        ColorField {
+          id: colorRow
+          required property var modelData
+
+          width: parent.width
+          theme: root.theme
+          token: String(colorRow.modelData)
+          value: root.strAt("ui.claudePalette." + String(colorRow.modelData), "")
+          onColorEdited: function(token, value) { root.setPath("ui.claudePalette." + token, value) }
+        }
+      }
+
+      Button {
+        theme: root.theme
+        text: "reset the claude palette"
+        onClicked: {
+          var preset = Palette.claudePreset()
+          for (var key in preset) {
+            if (preset.hasOwnProperty(key)) root.setPath("ui.claudePalette." + key, preset[key])
+          }
         }
       }
     }
 
     // ---- safety -----------------------------------------------------------
-    SectionHeader {
+    Section {
       width: parent.width
       theme: root.theme
-      text: "safety"
-    }
+      title: "safety"
+      summary: "emergency exit, watchdog"
+      expanded: root.openSection === "safety"
+      onToggled: root.openSection = root.openSection === "safety" ? "" : "safety"
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "emergency exit"
-      hint: "hold esc for 3 seconds and type the phrase. off by default: the only exits are the finished challenges or the crash watchdog"
-      checked: root.boolAt("safety.emergencyExit", false)
-      onToggled: function(value) { root.setPath("safety.emergencyExit", value) }
-    }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "emergency exit"
+        hint: "hold esc for 3 seconds and type the phrase. off by default: the only exits are the finished challenges or the crash watchdog"
+        checked: root.boolAt("safety.emergencyExit", false)
+        onToggled: function(value) { root.setPath("safety.emergencyExit", value) }
+      }
 
-    Toggle {
-      width: parent.width
-      theme: root.theme
-      label: "crash watchdog"
-      hint: "restores the display and silences the alarm if the shell dies mid-sleep"
-      checked: root.boolAt("safety.watchdog", true)
-      onToggled: function(value) { root.setPath("safety.watchdog", value) }
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "crash watchdog"
+        hint: "restores the display and silences the alarm if the shell dies mid-sleep"
+        checked: root.boolAt("safety.watchdog", true)
+        onToggled: function(value) { root.setPath("safety.watchdog", value) }
+      }
     }
 
     // ---- history ----------------------------------------------------------
-    SectionHeader {
+    Section {
       width: parent.width
       theme: root.theme
-      text: "history"
-    }
-
-    Text {
-      width: parent.width
-      wrapMode: Text.WordWrap
-      textFormat: Text.PlainText
-      text: root.historyTotals
-        ? root.historyTotals.sessions + " sessions  ·  "
-          + Time.formatDuration(root.historyTotals.sleptMs) + " asleep  ·  "
-          + root.historyTotals.earlyExits + " early exits"
-        : ""
-      color: root.theme.dim
-      font.family: root.theme.fontFamily
-      font.pixelSize: Style.font.caption
-    }
-
-    Repeater {
-      model: root.historyRecent
+      title: "history"
+      summary: "recent sessions"
+      expanded: root.openSection === "history"
+      onToggled: root.openSection = root.openSection === "history" ? "" : "history"
 
       Text {
-        id: historyRow
-        required property var modelData
-
         width: parent.width
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
-        text: {
-          var record = historyRow.modelData
-          if (!record) return ""
-          var when = record.armedAt ? Time.formatDate(record.armedAt) + " " + Time.formatClock(record.armedAt, { h24: true, seconds: false }) : ""
-          return when + "  ·  " + History.summary(record)
-        }
-        color: root.theme.faint
+        text: root.historyTotals
+          ? root.historyTotals.sessions + " sessions  ·  "
+            + Time.formatDuration(root.historyTotals.sleptMs) + " asleep  ·  "
+            + root.historyTotals.earlyExits + " early exits"
+          : ""
+        color: root.theme.dim
         font.family: root.theme.fontFamily
         font.pixelSize: Style.font.caption
+      }
+
+      Repeater {
+        model: root.historyRecent
+
+        Text {
+          id: historyRow
+          required property var modelData
+
+          width: parent.width
+          wrapMode: Text.WordWrap
+          textFormat: Text.PlainText
+          text: {
+            var record = historyRow.modelData
+            if (!record) return ""
+            var when = record.armedAt ? Time.formatDate(record.armedAt) + " " + Time.formatClock(record.armedAt, { h24: true, seconds: false }) : ""
+            return when + "  ·  " + History.summary(record)
+          }
+          color: root.theme.faint
+          font.family: root.theme.fontFamily
+          font.pixelSize: Style.font.caption
+        }
       }
     }
 
