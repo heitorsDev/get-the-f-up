@@ -72,6 +72,21 @@ Item {
   function touch() {
     root.draft = JSON.parse(JSON.stringify(root.draft))
     root.dirty = true
+    autosave.restart()
+  }
+
+  // Changes are written shortly after the last edit, so there is no Save
+  // button to forget. The wait lets a burst of typing become one write.
+  Timer {
+    id: autosave
+    interval: 700
+    onTriggered: root.flush()
+  }
+
+  // Write now if there is anything unsaved (also called when the panel closes).
+  function flush() {
+    autosave.stop()
+    if (root.dirty) root.save()
   }
 
   function getPath(path) {
@@ -246,6 +261,8 @@ Item {
   }
 
   Component.onCompleted: root.reload()
+  Component.onDestruction: root.flush()
+  onVisibleChanged: if (!root.visible) root.flush()
 
   // The service can show up after the panel was built, in which case the
   // first draft was built from the defaults. Reload it once the real
@@ -1007,51 +1024,16 @@ Item {
     }
 
     // ---- save -------------------------------------------------------------
-    SectionHeader {
+    // Edits save themselves; this line says where they are.
+    Text {
       width: parent.width
-      theme: root.theme
-      text: "save"
-    }
-
-    Item {
-      id: saveRow
-      width: parent.width
-      height: Style.space(32)
-
-      Row {
-        id: saveActions
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Style.space(8)
-
-        Button {
-          theme: root.theme
-          kind: "accent"
-          text: "save"
-          onClicked: root.save()
-        }
-
-        Button {
-          theme: root.theme
-          text: "cancel"
-          onClicked: root.reload()
-        }
-      }
-
-      Text {
-        anchors.left: saveActions.right
-        anchors.leftMargin: Style.space(10)
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        wrapMode: Text.WordWrap
-        textFormat: Text.PlainText
-        text: root.statusText !== ""
-          ? root.statusText
-          : (root.dirty ? "unsaved changes" : "")
-        color: root.statusIsError ? root.theme.error : root.theme.faint
-        font.family: root.theme.fontFamily
-        font.pixelSize: Style.font.caption
-      }
+      wrapMode: Text.WordWrap
+      textFormat: Text.PlainText
+      text: root.statusIsError ? root.statusText
+        : (root.dirty ? "saving..." : "changes are saved automatically")
+      color: root.statusIsError ? root.theme.error : root.theme.faint
+      font.family: root.theme.fontFamily
+      font.pixelSize: Style.font.caption
     }
   }
 
