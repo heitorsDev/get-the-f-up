@@ -497,6 +497,92 @@ Scope {
     return root.ok({ correct: correct, finished: done })
   }
 
+  // ---- the camera -----------------------------------------------------------
+  // A dedicated Process: a capture can take ten seconds and must never hold
+  // up the restore commands queued behind it on the shared runner. No image
+  // is written anywhere; ffmpeg prints luminance statistics and discards the
+  // frame.
+  property var _cameraDone: null
+  property bool _cameraStarted: false
+
+  Process {
+    id: cameraProc
+    stdout: StdioCollector { id: cameraOut }
+    stderr: StdioCollector { id: cameraErr }
+    onStarted: root._cameraStarted = true
+    onExited: function(exitCode) {
+      root.finishCamera(exitCode, cameraOut.text + "\n" + cameraErr.text)
+    }
+    onRunningChanged: {
+      // A command that cannot start never emits `exited`.
+      if (!cameraProc.running && root._cameraDone !== null && !root._cameraStarted) {
+        root.finishCamera(127, "")
+      }
+    }
+  }
+
+  function runCamera(done) {
+    if (cameraProc.running || root._cameraDone !== null) return false
+    root._cameraDone = done
+    root._cameraStarted = false
+    cameraProc.command = Camera.captureCommand(root.config.camera.device, Camera.SETTLE_FRAMES)
+    cameraProc.running = true
+    return true
+  }
+
+  function finishCamera(exitCode, text) {
+    var done = root._cameraDone
+    root._cameraDone = null
+    if (done) done(Camera.reading(text, exitCode))
+  }
+
+  // Arm-time check: is the lens blocked? (SPEC.md §4)
+  function precheckCamera() {
+    if (!root.config.camera.enabled || root.config.camera.warnOnArm === false) {
+      root.cameraPrecheck = "unknown"
+      return root.ok()
+    }
+    root.cameraPrecheck = "checking"
+    var started = root.runCamera(function(reading) {
+      root.cameraPrecheck = Camera.classify(reading, root.config.camera)
+    })
+    if (!started) {
+      root.cameraPrecheck = "unknown"
+      return root.fail("the camera is busy")
+    }
+    return root.ok()
+  }
+
+  // One frame for the current camera step.
+  function captureCamera() {
+    if (root.state === "idle") return root.fail("sleep mode is not active")
+    var engine = root._engine
+    if (!engine || !engine.current || engine.current.type !== "camera") {
+      return root.fail("the current step is not a camera step")
+    }
+    root.cameraStatus = "capturing"
+    var started = root.runCamera(function(reading) {
+      root.cameraStatus = "idle"
+      // The session may have ended while the camera ran.
+      if (root._engine !== engine) return
+      var result = Challenge.submitCamera(root._engine, reading, root.config.camera)
+      root._engine = result.state
+      root.challenge = Challenge.view(root._engine)
+      root.lastResult = {
+        correct: result.correct === true,
+        skipped: result.skipped === true,
+        reason: String(result.reason || (result.correct ? "ok" : "too dark")),
+        at: Date.now()
+      }
+      if (root._engine && root._engine.done) root.exitSession("the challenge was solved")
+    })
+    if (!started) {
+      root.cameraStatus = "idle"
+      return root.fail("the camera is busy")
+    }
+    return root.ok()
+  }
+
   function emergencyExit(confirmation) {
     if (!root.config.safety || root.config.safety.emergencyExit !== true) {
       return root.fail("the emergency exit is disabled")
