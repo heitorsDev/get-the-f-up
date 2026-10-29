@@ -205,3 +205,80 @@ test("wrapCommand runs any argv with the output framed", () => {
   assert.equal(framed.output, "hi\n")
   assert.equal(framed.exit, 3)
 })
+
+// ------------------------------------------------- watching the light live
+
+test("liveCommand takes a longer cap for the challenge", () => {
+  assert.equal(Camera.liveCommand("", "/tmp", 3, 3600)[7], "3600")
+  assert.equal(Camera.liveCommand("", "/tmp", 3)[7], "600")
+})
+
+test("watchProgress runs from black (16) to the threshold", () => {
+  assert.equal(Camera.watchProgress(16, 60), 0)
+  assert.equal(Camera.watchProgress(38, 60), 0.5)
+  assert.equal(Camera.watchProgress(60, 60), 1)
+  assert.equal(Camera.watchProgress(200, 60), 1)
+  assert.equal(Camera.watchProgress(-1, 60), 0)
+  // A threshold at or below black cannot divide by zero.
+  assert.equal(Camera.watchProgress(20, 16), 1)
+})
+
+function feed(samples, cfg) {
+  let state = Camera.watchInit()
+  const out = []
+  for (const s of samples) {
+    const r = Camera.watchStep(state, s, cfg)
+    state = r.state
+    out.push(r)
+  }
+  return out
+}
+
+const WATCH_CFG = { lightThreshold: 60, nearBlackCutoff: 24 }
+
+test("watchStep passes only after the light has been held for a few samples", () => {
+  const bright = { luma: 90, spread: 80 }
+  const r = feed([bright, bright, bright], WATCH_CFG)
+  assert.deepEqual(r.map((x) => x.outcome), ["waiting", "waiting", "pass"])
+  assert.equal(r[2].verdict, "on")
+  assert.equal(r[0].progress, 1)
+  assert.equal(Math.round(r[1].hold * 100), 67)
+})
+
+test("watchStep: a single bright frame does not pass and the hold resets", () => {
+  const bright = { luma: 90, spread: 80 }
+  const dim = { luma: 40, spread: 60 }
+  const r = feed([bright, bright, dim, bright, bright], WATCH_CFG)
+  assert.ok(r.every((x) => x.outcome === "waiting"))
+  assert.equal(r[2].hold, 0)
+  assert.equal(r[2].verdict, "dim")
+})
+
+test("watchStep reports blocked only after a sustained black, flat stream", () => {
+  const black = { luma: 17, spread: 0 }
+  const r = feed(new Array(15).fill(black), WATCH_CFG)
+  assert.equal(r[13].outcome, "waiting")
+  assert.equal(r[14].outcome, "blocked")
+  assert.equal(r[14].verdict, "blocked")
+})
+
+test("watchStep: warm-up darkness followed by light never reports blocked", () => {
+  const black = { luma: 17, spread: 0 }
+  const bright = { luma: 90, spread: 80 }
+  const r = feed([...new Array(10).fill(black), bright, bright, bright], WATCH_CFG)
+  assert.equal(r[r.length - 1].outcome, "pass")
+  assert.ok(!r.some((x) => x.outcome === "blocked"))
+})
+
+test("watchStep treats a missing sample as nothing yet", () => {
+  const r = Camera.watchStep(Camera.watchInit(), { luma: -1, spread: -1 }, WATCH_CFG)
+  assert.equal(r.outcome, "waiting")
+  assert.equal(r.verdict, "unknown")
+  assert.equal(r.progress, 0)
+})
+
+test("watchStep follows the threshold it is given", () => {
+  const sample = { luma: 90, spread: 80 }
+  assert.equal(feed([sample, sample, sample], { lightThreshold: 120, nearBlackCutoff: 24 })[2].outcome, "waiting")
+  assert.equal(feed([sample, sample, sample], { lightThreshold: 80, nearBlackCutoff: 24 })[2].outcome, "pass")
+})

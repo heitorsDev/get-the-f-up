@@ -31,7 +31,7 @@ function previewFile(runtimeDir) {
 // One process, one open of the camera: a scaled JPEG overwritten at LIVE_FPS,
 // plus signalstats lines on stderr (ffmpeg's log). `timeout` is the safety
 // net if the shell dies without stopping the stream.
-function liveCommand(device, runtimeDir, fps) {
+function liveCommand(device, runtimeDir, fps, capSeconds) {
   var script = [
     "dir=\"$1\"; dev=\"$2\"; fps=\"$3\"; cap=\"$4\"",
     "mkdir -p -m 700 \"$dir\" || exit 1",
@@ -41,7 +41,7 @@ function liveCommand(device, runtimeDir, fps) {
       "-q:v 6 -f image2 -update 1 -atomic_writing 1 \"$dir/preview.jpg\""
   ].join("\n")
   return ["bash", "-c", script, "sleep-mode-camera-live", previewDir(runtimeDir),
-    String(device || DEFAULT_DEVICE), String(fps || LIVE_FPS), String(LIVE_CAP_S)]
+    String(device || DEFAULT_DEVICE), String(fps || LIVE_FPS), String(capSeconds || LIVE_CAP_S)]
 }
 
 function cleanupCommand(runtimeDir) {
@@ -75,6 +75,54 @@ function verdict(luma, spread, cameraConfig) {
   var threshold = cfg.lightThreshold === undefined ? 60 : Number(cfg.lightThreshold)
   if (isNearBlack({ luma: Number(luma), variance: Number(spread) < 0 ? null : Number(spread) }, cfg)) return "blocked"
   return Number(luma) >= threshold ? "on" : "dim"
+}
+
+// ---------------------------------------------------- watching the light
+// The challenge's camera step does not ask for a capture: it watches the
+// live stream and passes by itself once the light has been bright enough for
+// a moment.
+//
+// A single bright frame (a flash, a screen) must not pass the step, and the
+// first frames of a cold camera are underexposed, so a blocked lens is only
+// believed after it has stayed black and flat for a few seconds.
+var WATCH_PASS_SAMPLES = 3
+var WATCH_BLOCKED_SAMPLES = 15
+
+function watchInit() {
+  return { held: 0, blocked: 0 }
+}
+
+// How far the light is toward the threshold, 0..1: black (16) is empty and
+// the threshold is full.
+function watchProgress(luma, threshold) {
+  var t = Number(threshold)
+  var l = Number(luma)
+  if (isNaN(l) || l < 0) return 0
+  if (!(t > 16)) return l >= t ? 1 : 0
+  return Math.max(0, Math.min(1, (l - 16) / (t - 16)))
+}
+
+// sample: { luma, spread } -> { state, verdict, progress, hold, outcome }
+// outcome: "pass" | "blocked" | "waiting"
+function watchStep(state, sample, cameraConfig) {
+  var cfg = cameraConfig || {}
+  var prev = state || watchInit()
+  var threshold = cfg.lightThreshold === undefined ? 60 : Number(cfg.lightThreshold)
+  var luma = sample ? Number(sample.luma) : -1
+  var spread = sample && sample.spread !== undefined ? Number(sample.spread) : -1
+  var v = verdict(luma, spread, cfg)
+  var held = v !== "unknown" && luma >= threshold ? prev.held + 1 : 0
+  var blocked = v === "blocked" ? prev.blocked + 1 : 0
+  var outcome = "waiting"
+  if (held >= WATCH_PASS_SAMPLES) outcome = "pass"
+  else if (blocked >= WATCH_BLOCKED_SAMPLES) outcome = "blocked"
+  return {
+    state: { held: held, blocked: blocked },
+    verdict: v,
+    progress: watchProgress(luma, threshold),
+    hold: Math.min(1, held / WATCH_PASS_SAMPLES),
+    outcome: outcome
+  }
 }
 
 // One-shot capture whose output and exit code arrive on the same stream.
@@ -211,6 +259,11 @@ if (typeof module !== "undefined" && module.exports) {
     parseLiveLine: parseLiveLine,
     liveErrorCode: liveErrorCode,
     verdict: verdict,
+    WATCH_PASS_SAMPLES: WATCH_PASS_SAMPLES,
+    WATCH_BLOCKED_SAMPLES: WATCH_BLOCKED_SAMPLES,
+    watchInit: watchInit,
+    watchProgress: watchProgress,
+    watchStep: watchStep,
     BEGIN_MARKER: BEGIN_MARKER,
     wrapCommand: wrapCommand,
     unwrap: unwrap,
