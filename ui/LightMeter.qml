@@ -18,11 +18,24 @@ Item {
   property real hold: 0
   // "unknown" | "dim" | "on" | "blocked"
   property string verdict: "unknown"
+  // The light gate (the light must stay on to keep the challenge unlocked)
+  // rather than a camera step.
+  property bool gate: false
+  property bool unlocked: false
 
   readonly property bool reached: root.progress >= 1
   readonly property color tone: root.reached ? root.theme.success : root.theme.accent
 
   function message() {
+    if (root.gate) {
+      if (root.unlocked) {
+        return root.verdict === "on" ? "light on. keep it on to keep the challenge unlocked"
+          : "the light dropped. bring it back or the challenge locks"
+      }
+      if (root.verdict === "blocked") return "the lens looks blocked. the challenge unlocks itself in a few seconds"
+      if (root.verdict === "unknown") return "waiting for the camera..."
+      return root.verdict === "on" ? "bright enough. hold it..." : "locked. switch the room light on to unlock the challenge"
+    }
     switch (root.verdict) {
     case "on": return "bright enough. hold it..."
     case "dim": return "not bright enough yet. switch the room light on"
@@ -44,7 +57,7 @@ Item {
       Text {
         width: parent.width / 2
         textFormat: Text.PlainText
-        text: "light"
+        text: root.gate ? (root.unlocked ? "light  ·  unlocked" : "light  ·  locked") : "light"
         color: root.theme.dim
         font.family: root.theme.fontFamily
         font.pixelSize: Style.font.bodySmall

@@ -29,6 +29,11 @@ Item {
   readonly property int totalSteps: view ? Math.max(1, Number(view.totalSteps || 1)) : 1
   readonly property bool capturing: cameraStatus === "capturing"
 
+  // The optional light gate: the challenge below is locked unless the light is on.
+  readonly property bool gateActive: root.host ? (root.host.lightGate === true && String(root.host.lightReleased) === "") : false
+  readonly property bool gateLocked: root.host ? root.host.lightLocked === true : false
+  readonly property bool gateReleased: root.host ? (root.host.lightGate === true && String(root.host.lightReleased) !== "") : false
+
   readonly property string cameraMessage: {
     var code = root.host ? String(root.host.cameraError) : ""
     if (code === "EACCES") return "no permission to open the camera"
@@ -114,8 +119,68 @@ Item {
       }
     }
 
+    // ---- light gate --------------------------------------------------------
+    // Locked: the live view and the meter are all there is. Unlocked: a small
+    // view beside the meter stays up, because the light has to stay on.
+    Column {
+      visible: root.gateActive && root.gateLocked
+      width: Math.min(parent.width, Style.space(380))
+      anchors.horizontalCenter: parent.horizontalCenter
+      spacing: Style.space(12)
+
+      CameraFrame {
+        width: parent.width
+        theme: root.theme
+        url: root.host ? String(root.host.cameraFrame) : ""
+        seq: root.host ? Number(root.host.cameraFrameSeq) : 0
+        message: root.cameraMessage
+        messageIsError: root.host ? String(root.host.cameraError) !== "" : false
+      }
+
+      LightMeter {
+        width: parent.width
+        theme: root.theme
+        gate: true
+        unlocked: false
+        luma: root.host ? Number(root.host.cameraLuma) : -1
+        threshold: root.host ? Number(root.host.lightThreshold) : 60
+        progress: root.host ? Number(root.host.cameraProgress) : 0
+        hold: root.host ? Number(root.host.cameraHold) : 0
+        verdict: root.host ? String(root.host.cameraVerdict) : "unknown"
+      }
+    }
+
+    Row {
+      visible: root.gateActive && !root.gateLocked
+      width: parent.width
+      spacing: Style.space(12)
+
+      CameraFrame {
+        id: miniFrame
+        width: Style.space(120)
+        theme: root.theme
+        url: root.host ? String(root.host.cameraFrame) : ""
+        seq: root.host ? Number(root.host.cameraFrameSeq) : 0
+        message: ""
+      }
+
+      LightMeter {
+        width: parent.width - miniFrame.width - Style.space(12)
+        anchors.verticalCenter: parent.verticalCenter
+        theme: root.theme
+        gate: true
+        unlocked: true
+        luma: root.host ? Number(root.host.cameraLuma) : -1
+        threshold: root.host ? Number(root.host.lightThreshold) : 60
+        progress: root.host ? Number(root.host.cameraProgress) : 0
+        hold: root.host ? Number(root.host.cameraHold) : 0
+        verdict: root.host ? String(root.host.cameraVerdict) : "unknown"
+      }
+    }
+
     // ---- prompt ------------------------------------------------------------
     Card {
+      visible: !root.gateLocked
       width: parent.width
       height: promptColumn.implicitHeight + Style.space(22) * 2
       theme: root.theme
@@ -165,7 +230,7 @@ Item {
     // ---- input (text steps) ----------------------------------------------
     Card {
       id: inputCard
-      visible: root.type !== "camera"
+      visible: root.type !== "camera" && !root.gateLocked
       width: parent.width
       height: inputRow.implicitHeight + Style.space(12) * 2
       theme: root.theme
@@ -250,6 +315,8 @@ Item {
       horizontalAlignment: Text.AlignHCenter
       textFormat: Text.PlainText
       text: {
+        if (root.gateLocked) return "locked until the light is on"
+        if (root.gateReleased) return "light check unavailable: the challenge is unlocked"
         if (root.wrongFlash) return "not quite"
         if (root.capturing) return "capturing one frame..."
         if (root.outcomeText !== "") return root.outcomeText

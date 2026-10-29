@@ -78,6 +78,11 @@ Item {
   readonly property string cameraFrame: root.service && root.service.cameraFrame ? String(root.service.cameraFrame) : ""
   readonly property int cameraFrameSeq: root.service && root.service.cameraFrameSeq !== undefined ? Number(root.service.cameraFrameSeq) : 0
   readonly property string cameraError: root.service && root.service.cameraLiveError ? String(root.service.cameraLiveError) : ""
+  // The optional light gate: the challenge is locked unless the light is on.
+  readonly property bool lightGate: root.service !== null && root.service.lightGate === true
+  readonly property bool lightLocked: root.service !== null && root.service.lightLocked === true
+  readonly property bool lightUnlocked: root.service !== null && root.service.lightUnlocked === true
+  readonly property string lightReleased: root.service && root.service.lightReleased ? String(root.service.lightReleased) : ""
   readonly property int lightThreshold: config.camera && config.camera.lightThreshold !== undefined ? Number(config.camera.lightThreshold) : 60
   readonly property var lastResult: root.service ? root.service.lastResult : null
 
@@ -112,7 +117,7 @@ Item {
   property bool memoryVisible: false
   property string memoryShownKey: ""
   property bool pendingCamera: false
-  readonly property bool inputLocked: memoryVisible
+  readonly property bool inputLocked: memoryVisible || lightLocked
 
   property bool escHolding: false
   property real escHoldProgress: 0
@@ -138,6 +143,7 @@ Item {
   // while the clock screen is up, and never in a preview.
   readonly property bool challengeShown: root.opened && root.revealed && root.active && !root.previewing
   onChallengeShownChanged: root.reportChallengeShown()
+  onLightLockedChanged: if (!root.lightLocked) root.maybeFlashMemory()
   onServiceChanged: root.reportChallengeShown()
 
   function reportChallengeShown() {
@@ -262,7 +268,9 @@ Item {
   }
 
   function maybeFlashMemory() {
-    if (!root.revealed || root.currentType !== "memory" || root.memoryShownKey === root.challengeKey) return
+    // A memory sequence is not flashed while the light gate holds the
+    // challenge shut; it flashes when the light comes on.
+    if (!root.revealed || root.lightLocked || root.currentType !== "memory" || root.memoryShownKey === root.challengeKey) return
     var inst = root.challengeView && root.challengeView.instance ? root.challengeView.instance : {}
     root.memoryShownKey = root.challengeKey
     root.memoryVisible = true
@@ -450,8 +458,9 @@ Item {
     onTriggered: {
       // The camera step stays up: it has no typed draft, and hiding it would
       // close the camera while the light is being switched on.
+      // While locked, the camera must stay open so the light can be seen.
       if (root.draft === "" && !root.emergencyPrompt && !root.memoryVisible
-          && root.currentType !== "camera") root.revealed = false
+          && root.currentType !== "camera" && !root.lightLocked) root.revealed = false
       else restart()
     }
   }
