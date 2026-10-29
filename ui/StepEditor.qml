@@ -177,7 +177,7 @@ Item {
         // Bounded, so it wraps instead of running under the weight stepper.
         width: root.showWeight ? parent.width - weightSpinner.width - Style.space(12) : parent.width
         theme: root.theme
-        options: ["math", "string", "memory", "camera"]
+        options: ["math", "string", "memory"]
         value: root.type
         onChosen: function(value) { root.setType(String(value)) }
       }

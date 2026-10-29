@@ -498,7 +498,7 @@ Item {
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
           theme: root.theme
-          options: ["math", "string", "memory", "camera"]
+          options: ["math", "string", "memory"]
           value: "math"
           // Choice only reports the click; the owner keeps the value.
           onChosen: function(chosen) { addStepChoice.value = chosen }
@@ -692,6 +692,15 @@ Item {
         placeholder: "/dev/video0"
         text: root.strAt("camera.device", "")
         onEdited: function(value) { root.setPath("camera.device", value) }
+      }
+
+      Toggle {
+        width: parent.width
+        theme: root.theme
+        label: "require the light to do the challenges"
+        hint: "the challenges stay locked unless the room light is on, and lock again if it goes off. the camera is open while you solve them; it is released if it cannot be used"
+        checked: root.boolAt("camera.requireLight", false)
+        onToggled: function(value) { root.setPath("camera.requireLight", value) }
       }
 
       CameraPreview {
