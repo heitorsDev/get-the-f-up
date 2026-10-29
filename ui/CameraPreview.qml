@@ -142,71 +142,15 @@ Card {
     }
 
     // ---- the frame ---------------------------------------------------------
-    Rectangle {
+    CameraFrame {
       width: parent.width
-      height: Math.round(width * 0.75)
       visible: root.wanted
-      radius: Style.cornerRadius
-      color: "#000000"
-      border.width: 1
-      border.color: root.theme.border
-      clip: true
-
-      // Two images take turns: the hidden one reloads the (overwritten) file
-      // and is shown once it is ready, so there is no flicker and no reliance
-      // on a changing URL to defeat the cache.
-      Item {
-        id: frames
-        anchors.fill: parent
-        anchors.margins: 1
-
-        property bool showA: true
-        readonly property string url: root.service ? String(root.service.cameraFrame) : ""
-        readonly property int seq: root.service ? Number(root.service.cameraFrameSeq) : 0
-
-        onSeqChanged: {
-          if (frames.url === "") return
-          var target = frames.showA ? frameB : frameA
-          target.source = ""
-          target.source = frames.url
-        }
-
-        Image {
-          id: frameA
-          anchors.fill: parent
-          visible: frames.showA && status === Image.Ready
-          fillMode: Image.PreserveAspectFit
-          // A selfie view: moving left moves left on screen.
-          mirror: true
-          cache: false
-          asynchronous: true
-          onStatusChanged: if (status === Image.Ready) frames.showA = true
-        }
-
-        Image {
-          id: frameB
-          anchors.fill: parent
-          visible: !frames.showA && status === Image.Ready
-          fillMode: Image.PreserveAspectFit
-          mirror: true
-          cache: false
-          asynchronous: true
-          onStatusChanged: if (status === Image.Ready) frames.showA = false
-        }
-      }
-
-      Text {
-        anchors.centerIn: parent
-        width: parent.width - Style.space(24)
-        horizontalAlignment: Text.AlignHCenter
-        visible: root.error !== "" || root.luma < 0
-        textFormat: Text.PlainText
-        text: root.error !== "" ? root.errorText(root.error) : "opening the camera..."
-        color: root.error !== "" ? root.theme.error : root.theme.dim
-        font.family: root.theme.fontFamily
-        font.pixelSize: Style.font.bodySmall
-        wrapMode: Text.WordWrap
-      }
+      theme: root.theme
+      url: root.service ? String(root.service.cameraFrame) : ""
+      seq: root.service ? Number(root.service.cameraFrameSeq) : 0
+      message: root.error !== "" ? root.errorText(root.error)
+        : (root.luma < 0 ? "opening the camera..." : "")
+      messageIsError: root.error !== ""
     }
 
     // ---- the reading -------------------------------------------------------
