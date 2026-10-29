@@ -520,6 +520,7 @@ Scope {
     }
     var done = !!(root._engine && root._engine.done)
     if (done) root.exitSession("the challenge was solved")
+    else root.syncCameraWatch()
     return root.ok({ correct: correct, finished: done })
   }
 
@@ -577,11 +578,14 @@ Scope {
     done(Camera.reading(framed.output, framed.exit === null ? root._cameraExit : framed.exit))
   }
 
-  // ---- the live preview (settings panel) -------------------------------------
-  // Off until startCameraLive() is called from an explicit button, and stopped
-  // when the panel closes, a session begins or the shell goes away. Frames go
-  // to a file in the runtime dir (tmpfs) for the panel to show; it is removed
-  // on stop. See Camera.liveCommand.
+  // ---- the live stream -------------------------------------------------------
+  // One ffmpeg stream with two possible owners:
+  //   "settings"  - the settings panel's preview, opened by an explicit button
+  //                 and stopped when the panel closes or a session begins;
+  //   "challenge" - the camera step, watched for as long as that step is on
+  //                 screen (see syncCameraWatch).
+  // Frames go to a file in the runtime dir (tmpfs) for the UI to show, and the
+  // directory is removed when the stream stops. See Camera.liveCommand.
   readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
   property bool cameraLive: false
   property real cameraLuma: -1
@@ -590,6 +594,9 @@ Scope {
   property string cameraFrame: ""
   property int cameraFrameSeq: 0
   property real _liveLow: -1
+  property string _liveOwner: ""
+  // A stream asked for while the previous one is still shutting down.
+  property var _pendingOpen: null
 
   Process {
     id: liveProc
@@ -597,13 +604,33 @@ Scope {
       onRead: function(line) { root.onLiveLine(line) }
     }
     onExited: function(exitCode) {
+      var owner = root._liveOwner
       var wanted = root.cameraLive
-      console.log("sleep-mode: camera preview process exited with " + exitCode
+      console.log("sleep-mode: camera stream exited with " + exitCode
         + (root.cameraLiveError ? " (" + root.cameraLiveError + ")" : ""))
       root.cameraLive = false
       root.cameraFrame = ""
+      root._liveOwner = ""
       if (wanted && root.cameraLiveError === "") {
-        root.cameraLiveError = exitCode === 124 ? "stopped after ten minutes" : "EIO"
+        root.cameraLiveError = exitCode === 124 ? "stopped after the time cap" : "EIO"
+      }
+
+      if (root._pendingOpen) {
+        var next = root._pendingOpen
+        root._pendingOpen = null
+        root._openLive(next.device, next.owner, next.cap)
+        return
+      }
+      if (owner === "challenge" && root.cameraWatching) {
+        root.cameraWatching = false
+        if (exitCode === 124) {
+          // Only the time cap: carry on watching.
+          root.syncCameraWatch()
+        } else {
+          // The camera went away under the step. Like any unusable camera it
+          // must never strand the user: skip the step.
+          root.finishWatch({ luma: null, variance: null, error: root.cameraLiveError || "EIO" })
+        }
       }
     }
   }
@@ -615,8 +642,10 @@ Scope {
         root._liveLow = stat.value
       } else if (stat.key === "YHIGH") {
         if (root._liveLow >= 0) root.cameraSpread = Math.max(0, stat.value - root._liveLow)
+        // The last of a frame's three statistics: the sample is complete.
+        root.onLiveSample()
       } else {
-        if (root.cameraFrameSeq === 0) console.log("sleep-mode: camera preview first frame, luma " + stat.value)
+        if (root.cameraFrameSeq === 0) console.log("sleep-mode: camera stream first frame, luma " + stat.value)
         root.cameraLuma = stat.value
         root.cameraLiveError = ""
         // The frame is written just after its statistics are printed.
@@ -627,39 +656,156 @@ Scope {
     }
     var code = Camera.liveErrorCode(line)
     if (code) {
-      console.log("sleep-mode: camera preview error " + code + ": " + line)
+      console.log("sleep-mode: camera stream error " + code + ": " + line)
       root.cameraLiveError = code
     }
   }
 
-  // device is optional: the settings panel passes the draft's, so a device
-  // typed but not yet saved can be tried.
-  function startCameraLive(device) {
-    if (root.state !== "idle") return root.fail("sleep mode is active")
-    if (root.cameraLive) return root.ok()
-    if (cameraProc.running || root._cameraDone !== null) return root.fail("the camera is busy")
+  function _openLive(device, owner, cap) {
+    if (liveProc.running) {
+      root._pendingOpen = { device: device, owner: owner, cap: cap }
+      liveProc.running = false
+      return
+    }
     root.cameraLuma = -1
     root.cameraSpread = -1
     root._liveLow = -1
     root.cameraLiveError = ""
     root.cameraFrame = ""
     root.cameraFrameSeq = 0
+    root._liveOwner = owner
     root.cameraLive = true
-    console.log("sleep-mode: camera preview starting on " + (device || root.config.camera.device))
-    liveProc.command = Camera.liveCommand(device || root.config.camera.device, root.runtimeDir, Camera.LIVE_FPS)
+    var dev = device || root.config.camera.device
+    console.log("sleep-mode: camera stream starting for " + owner + " on " + dev)
+    liveProc.command = Camera.liveCommand(dev, root.runtimeDir, Camera.LIVE_FPS, cap)
     liveProc.running = true
-    return root.ok()
   }
 
-  function stopCameraLive() {
-    if (!root.cameraLive && !liveProc.running) return root.ok()
+  function _closeLive() {
+    root._pendingOpen = null
+    root._liveOwner = ""
     root.cameraLive = false
     liveProc.running = false
     root.cameraFrame = ""
     root.cameraLuma = -1
     root.cameraSpread = -1
     root.run(Camera.cleanupCommand(root.runtimeDir))
+  }
+
+  // The settings preview. device is optional: the panel passes the draft's,
+  // so a device typed but not yet saved can be tried.
+  function startCameraLive(device) {
+    if (root.state !== "idle") return root.fail("sleep mode is active")
+    if (root.cameraLive) return root.ok()
+    if (cameraProc.running || root._cameraDone !== null) return root.fail("the camera is busy")
+    root._openLive(device, "settings", Camera.LIVE_CAP_S)
     return root.ok()
+  }
+
+  function stopCameraLive() {
+    // Never takes the camera away from the challenge's camera step.
+    if (root.cameraWatching) return root.ok()
+    if (!root.cameraLive && !liveProc.running) return root.ok()
+    root._closeLive()
+    return root.ok()
+  }
+
+  // ---- the challenge's camera step ----------------------------------------------
+  // The step does not ask for a capture: while it is on screen the light is
+  // watched in real time and the step passes by itself once the light has
+  // been bright enough for a moment. The camera is only open while the
+  // challenge is shown (revealed) and its current step is a camera step, never
+  // while the clock screen is up all night.
+  property bool challengeActive: false
+  property bool cameraWatching: false
+  property string cameraVerdict: "unknown"
+  // 0..1: how far the light is toward the threshold, and how long it has been
+  // held there. A meter binds to these.
+  property real cameraProgress: 0
+  property real cameraHold: 0
+  property var _watch: Camera.watchInit()
+
+  // Called by the overlay when the challenge appears or goes away.
+  function setChallengeActive(active) {
+    root.challengeActive = active === true
+    root.syncCameraWatch()
+    return root.ok()
+  }
+
+  function wantWatch() {
+    var engine = root._engine
+    return root.state !== "idle" && !root.previewing && root.challengeActive
+      && root.config.camera.enabled !== false
+      && !!engine && !engine.done && !!engine.current && engine.current.type === "camera"
+  }
+
+  // Open or close the stream to match what the challenge needs right now.
+  function syncCameraWatch() {
+    var want = root.wantWatch()
+    if (want && !root.cameraWatching) root.startWatch()
+    else if (!want && root.cameraWatching) root.stopWatch()
+  }
+
+  function startWatch() {
+    if (cameraProc.running || root._cameraDone !== null) return
+    root._watch = Camera.watchInit()
+    root.cameraVerdict = "unknown"
+    root.cameraProgress = 0
+    root.cameraHold = 0
+    root.cameraWatching = true
+    root._openLive(root.config.camera.device, "challenge", 3600)
+  }
+
+  function stopWatch() {
+    root.cameraWatching = false
+    root._closeLive()
+  }
+
+  function onLiveSample() {
+    if (!root.cameraWatching || root._liveOwner !== "challenge") return
+    var step = Camera.watchStep(root._watch,
+      { luma: root.cameraLuma, spread: root.cameraSpread }, root.config.camera)
+    root._watch = step.state
+    root.cameraVerdict = step.verdict
+    root.cameraProgress = step.progress
+    root.cameraHold = step.hold
+    if (step.outcome === "pass") {
+      root.finishWatch({ luma: root.cameraLuma, variance: root.cameraSpread, error: null })
+    } else if (step.outcome === "blocked") {
+      // Judged flat and black over several seconds: hand the engine a flat
+      // reading so it skips the step as a blocked lens.
+      root.finishWatch({ luma: root.cameraLuma, variance: 0, error: null })
+    }
+  }
+
+  function finishWatch(reading) {
+    root._watch = Camera.watchInit()
+    root.cameraProgress = 0
+    root.cameraHold = 0
+    var engine = root._engine
+    if (!engine || !engine.current || engine.current.type !== "camera") {
+      root.syncCameraWatch()
+      return
+    }
+    root.applyCameraResult(Challenge.submitCamera(engine, reading, root.config.camera))
+  }
+
+  // The engine's answer to a camera reading, from a watch or a manual capture.
+  function applyCameraResult(result) {
+    root._engine = result.state
+    root.challenge = Challenge.view(root._engine)
+    // Set before the watch is synced, so a listener sees the stream still on.
+    root.lastResult = {
+      correct: result.correct === true,
+      skipped: result.skipped === true,
+      reason: String(result.reason || (result.correct ? "ok" : "too dark")),
+      at: Date.now()
+    }
+    if (root._engine && root._engine.done) {
+      root.exitSession("the challenge was solved")
+      return
+    }
+    root.syncCameraWatch()
   }
 
   // Arm-time check: is the lens blocked? (SPEC.md §4)
@@ -691,16 +837,7 @@ Scope {
       root.cameraStatus = "idle"
       // The session may have ended while the camera ran.
       if (root._engine !== engine) return
-      var result = Challenge.submitCamera(root._engine, reading, root.config.camera)
-      root._engine = result.state
-      root.challenge = Challenge.view(root._engine)
-      root.lastResult = {
-        correct: result.correct === true,
-        skipped: result.skipped === true,
-        reason: String(result.reason || (result.correct ? "ok" : "too dark")),
-        at: Date.now()
-      }
-      if (root._engine && root._engine.done) root.exitSession("the challenge was solved")
+      root.applyCameraResult(Challenge.submitCamera(root._engine, reading, root.config.camera))
     })
     if (!started) {
       root.cameraStatus = "idle"
@@ -724,6 +861,8 @@ Scope {
   function exitSession(reason) {
     if (root.state === "idle") return
     var exitAt = Date.now()
+    if (root.cameraWatching) root.stopWatch()
+    root.challengeActive = false
     var record = null
     if (!root.dryRun) record = History.makeRecord(root.session, exitAt, root._engine)
 
