@@ -455,6 +455,276 @@ Item {
       }
     }
 
+    // ---- display ----------------------------------------------------------
+    SectionHeader {
+      width: parent.width
+      theme: root.theme
+      text: "display"
+    }
+
+    Text {
+      width: parent.width
+      wrapMode: Text.WordWrap
+      textFormat: Text.PlainText
+      text: "Only gamma dimming is supported: the HDMI monitor has no DDC/CI, so hyprsunset is the one dimming that reaches both screens."
+      color: root.theme.dim
+      font.family: root.theme.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
+    Spinner {
+      width: parent.width
+      theme: root.theme
+      label: "gamma while sleeping"
+      hint: "hyprsunset gamma level in percent"
+      value: root.numAt("display.gammaPercent", 50)
+      from: 1
+      to: 100
+      suffix: "%"
+      onModified: function(value) { root.setPath("display.gammaPercent", value) }
+    }
+
+    Spinner {
+      width: parent.width
+      theme: root.theme
+      label: "laptop backlight"
+      hint: "left alone under gamma-only dimming"
+      value: root.numAt("display.laptopBacklightPercent", 100)
+      from: 1
+      to: 100
+      suffix: "%"
+      onModified: function(value) { root.setPath("display.laptopBacklightPercent", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "restore the previous brightness on exit"
+      checked: root.boolAt("display.restoreBrightness", true)
+      onToggled: function(value) { root.setPath("display.restoreBrightness", value) }
+    }
+
+    // ---- audio ------------------------------------------------------------
+    SectionHeader {
+      width: parent.width
+      theme: root.theme
+      text: "audio"
+    }
+
+    LabeledField {
+      width: parent.width
+      theme: root.theme
+      label: "alarm sound"
+      hint: "leave empty for the bundled alarm"
+      placeholder: "/path/to/alarm.oga"
+      text: root.strAt("audio.soundPath", "")
+      onEdited: function(value) { root.setPath("audio.soundPath", value === "" ? null : value) }
+    }
+
+    LabeledField {
+      width: parent.width
+      theme: root.theme
+      label: "sink"
+      hint: "leave empty for the current default sink"
+      placeholder: "alsa_output.pci-0000_00_1f.3.analog-stereo"
+      text: root.strAt("audio.sink", "")
+      onEdited: function(value) { root.setPath("audio.sink", value === "" ? null : value) }
+    }
+
+    Spinner {
+      width: parent.width
+      theme: root.theme
+      label: "volume at ring time"
+      hint: "the alarm forces this volume so it is always audible"
+      value: root.numAt("audio.volumePercent", 80)
+      from: 1
+      to: 100
+      suffix: "%"
+      onModified: function(value) { root.setPath("audio.volumePercent", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "unmute at ring time"
+      checked: root.boolAt("audio.unmute", true)
+      onToggled: function(value) { root.setPath("audio.unmute", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "restore the previous volume on exit"
+      checked: root.boolAt("audio.restoreVolume", true)
+      onToggled: function(value) { root.setPath("audio.restoreVolume", value) }
+    }
+
+    // ---- camera -----------------------------------------------------------
+    SectionHeader {
+      width: parent.width
+      theme: root.theme
+      text: "camera"
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "camera steps enabled"
+      hint: "the camera proves the room light is on; it never stores an image"
+      checked: root.boolAt("camera.enabled", true)
+      onToggled: function(value) { root.setPath("camera.enabled", value) }
+    }
+
+    LabeledField {
+      width: parent.width
+      theme: root.theme
+      label: "device"
+      placeholder: "/dev/video0"
+      text: root.strAt("camera.device", "")
+      onEdited: function(value) { root.setPath("camera.device", value) }
+    }
+
+    Spinner {
+      width: parent.width
+      theme: root.theme
+      label: "light threshold"
+      hint: "mean luma that counts as the light being on (16 = black, 235 = white)"
+      value: root.numAt("camera.lightThreshold", 60)
+      from: 0
+      to: 235
+      onModified: function(value) { root.setPath("camera.lightThreshold", value) }
+    }
+
+    Spinner {
+      width: parent.width
+      theme: root.theme
+      label: "near-black cutoff"
+      hint: "below this the camera counts as unusable and the step is skipped"
+      value: root.numAt("camera.nearBlackCutoff", 24)
+      from: 0
+      to: 100
+      onModified: function(value) { root.setPath("camera.nearBlackCutoff", value) }
+    }
+
+    Spinner {
+      width: parent.width
+      theme: root.theme
+      label: "auto-skip after failures"
+      hint: "0 never auto-skips a camera step that keeps failing"
+      value: root.numAt("camera.autoSkipAfterFailures", 3)
+      from: 0
+      to: 10
+      onModified: function(value) { root.setPath("camera.autoSkipAfterFailures", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "warn when arming if the camera looks blocked"
+      checked: root.boolAt("camera.warnOnArm", true)
+      onToggled: function(value) { root.setPath("camera.warnOnArm", value) }
+    }
+
+    // ---- lockdown ---------------------------------------------------------
+    SectionHeader {
+      width: parent.width
+      theme: root.theme
+      text: "lockdown"
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "cover all monitors"
+      checked: root.boolAt("lockdown.coverAllMonitors", true)
+      onToggled: function(value) { root.setPath("lockdown.coverAllMonitors", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "exclusive keyboard focus"
+      checked: root.boolAt("lockdown.exclusiveKeyboard", true)
+      onToggled: function(value) { root.setPath("lockdown.exclusiveKeyboard", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "suppress notifications"
+      checked: root.boolAt("lockdown.suppressNotifications", true)
+      onToggled: function(value) { root.setPath("lockdown.suppressNotifications", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "pause other media"
+      checked: root.boolAt("lockdown.pauseMedia", true)
+      onToggled: function(value) { root.setPath("lockdown.pauseMedia", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "hide the bar"
+      checked: root.boolAt("lockdown.hideBar", true)
+      onToggled: function(value) { root.setPath("lockdown.hideBar", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "block window and workspace switching"
+      checked: root.boolAt("lockdown.blockWindowSwitching", true)
+      onToggled: function(value) { root.setPath("lockdown.blockWindowSwitching", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "suppress the idle screensaver and lock"
+      checked: root.boolAt("lockdown.suppressIdle", true)
+      onToggled: function(value) { root.setPath("lockdown.suppressIdle", value) }
+    }
+
+    Spinner {
+      width: parent.width
+      theme: root.theme
+      label: "maximum duration"
+      hint: "in minutes; 0 means no cap at all"
+      value: root.numAt("lockdown.maxDurationMinutes", 0)
+      from: 0
+      to: 1440
+      zeroText: "off"
+      onModified: function(value) { root.setPath("lockdown.maxDurationMinutes", value) }
+    }
+
+    // ---- safety -----------------------------------------------------------
+    SectionHeader {
+      width: parent.width
+      theme: root.theme
+      text: "safety"
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "emergency exit"
+      hint: "hold esc for 3 seconds and type the phrase. off by default: the only exits are the finished challenges or the crash watchdog"
+      checked: root.boolAt("safety.emergencyExit", false)
+      onToggled: function(value) { root.setPath("safety.emergencyExit", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "crash watchdog"
+      hint: "restores the display and silences the alarm if the shell dies mid-sleep"
+      checked: root.boolAt("safety.watchdog", true)
+      onToggled: function(value) { root.setPath("safety.watchdog", value) }
+    }
+
     // ---- save -------------------------------------------------------------
     SectionHeader {
       width: parent.width
