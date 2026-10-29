@@ -348,6 +348,7 @@ Scope {
       dryRun: dry === true
     }
     root.challenge = Challenge.view(root._engine)
+    root.resetGate(false)
     root._state = "armed"
     root.setupSession()
     return root.ok()
@@ -504,6 +505,7 @@ Scope {
   function submit(input) {
     if (root.state === "idle") return root.fail("sleep mode is not active")
     if (!root._engine) return root.fail("no challenge is running")
+    if (root.lightLocked) return root.fail("switch the room light on to unlock the challenge")
     if (root._engine.current && root._engine.current.type === "camera") {
       return root.fail("this is a camera step: capture a frame")
     }
@@ -627,9 +629,18 @@ Scope {
           // Only the time cap: carry on watching.
           root.syncCameraWatch()
         } else {
-          // The camera went away under the step. Like any unusable camera it
-          // must never strand the user: skip the step.
-          root.finishWatch({ luma: null, variance: null, error: root.cameraLiveError || "EIO" })
+          // The camera went away. Like any unusable camera it must never
+          // strand the user: let go of the gate and skip a camera step.
+          if (root.lightGate && root.lightReleased === "") {
+            root.lightReleased = "unavailable"
+            root.lightUnlocked = true
+          }
+          var engine = root._engine
+          if (engine && engine.current && engine.current.type === "camera") {
+            root.finishWatch({ luma: null, variance: null, error: root.cameraLiveError || "EIO" })
+          } else {
+            root.syncCameraWatch()
+          }
         }
       }
     }
@@ -725,6 +736,28 @@ Scope {
   property real cameraHold: 0
   property var _watch: Camera.watchInit()
 
+  // ---- the light gate (optional, config.camera.requireLight) -------------------
+  // Runs alongside the challenges rather than as a step: while it applies, the
+  // challenges are locked unless the room light is on, and they lock again if
+  // it goes off. Enforced in submit(), not only in the UI. It is released for
+  // the rest of the session when the camera cannot be used (a blocked lens, or
+  // a stream that dies), so a broken camera never strands anyone.
+  readonly property bool lightGate: root.state !== "idle" && !root.previewing
+    && root.config.camera.enabled !== false && root.config.camera.requireLight === true
+  property bool lightUnlocked: false
+  // "" | "blocked" | "unavailable": why the gate no longer applies.
+  property string lightReleased: ""
+  readonly property bool lightLocked: root.lightGate && root.lightReleased === "" && !root.lightUnlocked
+  property var _gate: Camera.gateInit()
+
+  function resetGate(keepRelease) {
+    var released = keepRelease === true ? root.lightReleased : ""
+    root._gate = Camera.gateInit()
+    root._gate.released = released
+    root.lightReleased = released
+    root.lightUnlocked = released !== ""
+  }
+
   // Called by the overlay when the challenge appears or goes away.
   function setChallengeActive(active) {
     root.challengeActive = active === true
@@ -732,11 +765,16 @@ Scope {
     return root.ok()
   }
 
+  // The stream is wanted while the challenge is on screen and either the
+  // current step is a camera step or the light gate still applies.
   function wantWatch() {
+    if (root.state === "idle" || root.previewing || !root.challengeActive) return false
+    if (root.config.camera.enabled === false) return false
     var engine = root._engine
-    return root.state !== "idle" && !root.previewing && root.challengeActive
-      && root.config.camera.enabled !== false
-      && !!engine && !engine.done && !!engine.current && engine.current.type === "camera"
+    if (!engine || engine.done) return false
+    var stepWanted = !!engine.current && engine.current.type === "camera"
+    var gateWanted = root.lightGate && root.lightReleased === ""
+    return stepWanted || gateWanted
   }
 
   // Open or close the stream to match what the challenge needs right now.
@@ -749,6 +787,8 @@ Scope {
   function startWatch() {
     if (cameraProc.running || root._cameraDone !== null) return
     root._watch = Camera.watchInit()
+    // The camera was off, so the light has to be verified again.
+    root.resetGate(true)
     root.cameraVerdict = "unknown"
     root.cameraProgress = 0
     root.cameraHold = 0
@@ -758,13 +798,32 @@ Scope {
 
   function stopWatch() {
     root.cameraWatching = false
+    // With the camera off the light cannot be verified.
+    root.lightUnlocked = root.lightReleased !== ""
     root._closeLive()
   }
 
   function onLiveSample() {
     if (!root.cameraWatching || root._liveOwner !== "challenge") return
-    var step = Camera.watchStep(root._watch,
-      { luma: root.cameraLuma, spread: root.cameraSpread }, root.config.camera)
+    var sample = { luma: root.cameraLuma, spread: root.cameraSpread }
+
+    if (root.lightGate && root.lightReleased === "") {
+      var gate = Camera.gateStep(root._gate, sample, root.config.camera)
+      root._gate = gate.state
+      root.lightUnlocked = gate.unlocked
+      root.cameraVerdict = gate.verdict
+      root.cameraProgress = gate.progress
+      root.cameraHold = gate.hold
+      if (gate.released !== "") {
+        console.log("sleep-mode: light gate released (" + gate.released + ")")
+        root.lightReleased = gate.released
+        root.syncCameraWatch()
+      }
+    }
+
+    var engine = root._engine
+    if (!engine || !engine.current || engine.current.type !== "camera") return
+    var step = Camera.watchStep(root._watch, sample, root.config.camera)
     root._watch = step.state
     root.cameraVerdict = step.verdict
     root.cameraProgress = step.progress
@@ -863,6 +922,7 @@ Scope {
     var exitAt = Date.now()
     if (root.cameraWatching) root.stopWatch()
     root.challengeActive = false
+    root.resetGate(false)
     var record = null
     if (!root.dryRun) record = History.makeRecord(root.session, exitAt, root._engine)
 
@@ -928,6 +988,7 @@ Scope {
       remaining: root.session ? Math.max(0, Number(root.session.ringAt) - root.now) : 0,
       preset: root.session ? String(root.session.preset) : "",
       reps: root.session ? Number(root.session.reps) : 0,
+      light: { gate: root.lightGate, unlocked: root.lightUnlocked, released: root.lightReleased },
       cameraPrecheck: root.cameraPrecheck,
       cameraStatus: root.cameraStatus,
       lastError: root.lastError,
