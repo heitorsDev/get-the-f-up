@@ -224,8 +224,8 @@ test('describe', () => {
   assert.equal(Steps.describe({ type: 'string', charset: 'alnum', length: 8 }), 'string · alnum · 8 chars');
   assert.equal(Steps.describe({ type: 'string', charset: 'xyz' }), 'string · custom · 8 chars');
   assert.equal(Steps.describe({ type: 'memory', length: 6 }), 'memory · 6 digits');
-  assert.equal(Steps.describe({ type: 'camera' }), 'camera · light on');
-  assert.equal(Steps.describe({ type: 'camera', threshold: 70 }), 'camera · light ≥ 70');
+  assert.equal(Steps.describe({ type: 'camera' }), 'camera · light check');
+  assert.equal(Steps.describe({ type: 'camera', threshold: 70 }), 'camera · light check');
 });
 
 test('sample returns a generated instance', () => {

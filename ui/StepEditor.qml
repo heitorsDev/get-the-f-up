@@ -67,8 +67,6 @@ Item {
       next.length = 8
     } else if (value === "memory") {
       next.length = 4
-    } else if (value === "camera") {
-      next.threshold = 60
     }
     root.previewText = ""
     root.changed(next)
@@ -91,7 +89,7 @@ Item {
       } else if (instance.type === "memory") {
         root.previewText = instance.prompt
       } else {
-        root.previewText = "light >= " + instance.threshold
+        root.previewText = "the light check, against the global threshold"
       }
     } catch (e) {
       root.previewText = "this step cannot be sampled"
@@ -294,16 +292,15 @@ Item {
     }
 
     // ---- camera parameters ------------------------------------------------
-    Spinner {
+    Text {
       width: parent.width
       visible: root.type === "camera"
-      theme: root.theme
-      label: "light threshold"
-      hint: "mean luma that counts as the light being on (16 = black, 235 = white)"
-      value: root.num("threshold", 60)
-      from: 0
-      to: 235
-      onModified: function(value) { root.patch("threshold", value) }
+      textFormat: Text.PlainText
+      text: "the light threshold is global: set it once under settings > camera. every camera step uses it."
+      color: root.theme.dim
+      font.family: root.theme.fontFamily
+      font.pixelSize: Style.font.caption
+      wrapMode: Text.WordWrap
     }
 
     // ---- sample output ----------------------------------------------------

@@ -37,11 +37,13 @@ function cameraEnabled(config) {
   return !(config && config.camera && config.camera.enabled === false)
 }
 
-// Camera steps carry the session's light threshold unless they set their own.
+// The light threshold is global (config.camera.lightThreshold), never per
+// step: any threshold a preset step carries is overwritten here.
 function stamp(spec, config) {
   var out = clone(spec)
-  if (out.type === "camera" && !isNumber(out.threshold) && config && config.camera && isNumber(config.camera.lightThreshold)) {
-    out.threshold = config.camera.lightThreshold
+  if (out.type === "camera") {
+    out.threshold = config && config.camera && isNumber(config.camera.lightThreshold)
+      ? config.camera.lightThreshold : DEFAULT_CAMERA.lightThreshold
   }
   return out
 }
@@ -223,8 +225,8 @@ function submitCamera(state, reading, cameraConfig, rng) {
   var cutoff = isNumber(cfg.nearBlackCutoff) ? cfg.nearBlackCutoff : DEFAULT_CAMERA.nearBlackCutoff
   var autoSkip = isNumber(cfg.autoSkipAfterFailures) ? cfg.autoSkipAfterFailures : DEFAULT_CAMERA.autoSkipAfterFailures
   var epsilon = isNumber(cfg.varianceEpsilon) ? cfg.varianceEpsilon : DEFAULT_CAMERA.varianceEpsilon
-  var threshold = isNumber(s.current.threshold) ? s.current.threshold
-    : (isNumber(cfg.lightThreshold) ? cfg.lightThreshold : DEFAULT_CAMERA.lightThreshold)
+  // Read at submit time, so changing the global threshold applies at once.
+  var threshold = isNumber(cfg.lightThreshold) ? cfg.lightThreshold : DEFAULT_CAMERA.lightThreshold
   var rd = reading || {}
 
   var skipReason = ""

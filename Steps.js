@@ -267,7 +267,7 @@ function describe(spec) {
   }
   if (s.type === "memory") return "memory · " + intOr(s.length, 4, 1, 20) + " digits"
   if (s.type === "camera") {
-    return typeof s.threshold === "number" ? "camera · light ≥ " + s.threshold : "camera · light on"
+    return "camera · light check"
   }
   return String(s.type)
 }

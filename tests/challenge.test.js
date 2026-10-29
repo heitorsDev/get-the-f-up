@@ -64,12 +64,13 @@ test('resolvePreset: unknown preset is null', () => {
   assert.equal(Challenge.resolvePreset(config(), 'nope', seeded(1)), null);
 });
 
-test('resolvePreset: fixed preset keeps order and stamps camera threshold', () => {
+test('resolvePreset: fixed preset keeps order and stamps the global camera threshold', () => {
   const r = Challenge.resolvePreset(config({ camera: { lightThreshold: 75 } }), 'thorough', seeded(1));
   assert.deepEqual(r.steps.map((s) => s.type), ['camera', 'math', 'math', 'math']);
   assert.equal(r.steps[0].threshold, 75);
-  const own = config({ challenge: { presets: { p: { steps: [{ type: 'camera', threshold: 90 }] } } } });
-  assert.equal(Challenge.resolvePreset(own, 'p').steps[0].threshold, 90);
+  // The threshold is global: a number on the step itself is overwritten.
+  const own = config({ camera: { lightThreshold: 75 }, challenge: { presets: { p: { steps: [{ type: 'camera', threshold: 90 }] } } } });
+  assert.equal(Challenge.resolvePreset(own, 'p').steps[0].threshold, 75);
 });
 
 test('resolvePreset: camera disabled drops camera steps', () => {
@@ -169,7 +170,7 @@ test('create + view: initial state', () => {
   assert.equal(v.errors, 0);
   assert.equal(v.done, false);
   assert.equal(v.presetName, 'thorough');
-  assert.equal(v.description, 'camera · light ≥ 60');
+  assert.equal(v.description, 'camera · light check');
   assert.deepEqual(JSON.parse(JSON.stringify(v)), v, 'view is plain JSON');
   assert.deepEqual(JSON.parse(JSON.stringify(s)), s, 'state is plain JSON');
   assert.equal(Challenge.view(null), null);
@@ -377,4 +378,13 @@ test('camera: config threshold applies when the instance has none', () => {
   assert.equal(Challenge.submitCamera(s, { luma: 80, variance: 9, error: null }, { lightThreshold: 90 }).reason, 'dark');
   assert.equal(Challenge.submitCamera(s, { luma: 95, variance: 9, error: null }, { lightThreshold: 90 }).reason, 'light');
   assert.equal(Challenge.submitCamera(s, { luma: 61, variance: 9, error: null }, null).reason, 'light');
+});
+
+test('camera: the global threshold decides, whatever the step or instance carries', () => {
+  const cfg = config({ camera: { lightThreshold: 75 }, challenge: { presets: { p: { steps: [{ type: 'camera', threshold: 200 }] } } } });
+  const s = Challenge.create(Challenge.resolvePreset(cfg, 'p'), 1);
+  // luma 80 passes the global 75 even though the step said 200
+  assert.equal(Challenge.submitCamera(s, { luma: 80, variance: 9, error: null }, { lightThreshold: 75 }).reason, 'light');
+  // and a later change of the global value applies at once, to the same step
+  assert.equal(Challenge.submitCamera(s, { luma: 80, variance: 9, error: null }, { lightThreshold: 120 }).reason, 'dark');
 });

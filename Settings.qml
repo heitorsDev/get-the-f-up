@@ -132,7 +132,7 @@ Item {
   function defaultStep(type) {
     if (type === "string") return { type: "string", charset: "alnum", length: 8 }
     if (type === "memory") return { type: "memory", length: 4 }
-    if (type === "camera") return { type: "camera", threshold: 60 }
+    if (type === "camera") return { type: "camera" }
     return { type: "math", operators: "+-", maxOperand: 20, tier: "easy" }
   }
 
