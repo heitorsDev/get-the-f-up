@@ -4,6 +4,7 @@ import QtQuick
 import qs.Commons
 import "ui"
 import "Config.js" as Config
+import "Palette.js" as Palette
 
 // The settings panel (SPEC §9, §12).
 //
@@ -39,6 +40,8 @@ Item {
     out.sort()
     return out
   }
+
+  readonly property var draftPalette: Palette.resolve(root.draft.ui ? root.draft.ui : ({}), Color)
 
   // ---- draft plumbing ----------------------------------------------------
   function reload() {
@@ -700,6 +703,127 @@ Item {
       onModified: function(value) { root.setPath("lockdown.maxDurationMinutes", value) }
     }
 
+    // ---- appearance -------------------------------------------------------
+    SectionHeader {
+      width: parent.width
+      theme: root.theme
+      text: "appearance"
+    }
+
+    Choice {
+      theme: root.theme
+      options: [
+        { value: "theme", label: "omarchy theme" },
+        { value: "claude", label: "claude code" }
+      ]
+      value: root.strAt("ui.palette", "theme")
+      onChosen: function(value) { root.setPath("ui.palette", String(value)) }
+    }
+
+    Card {
+      width: parent.width
+      height: Style.space(110)
+      theme: root.theme
+
+      SleepScreen {
+        anchors.centerIn: parent
+        theme: draftTheme
+        now: Date.now()
+        ringAt: 0
+        sizeScale: 0.26
+      }
+    }
+
+    LabeledField {
+      width: parent.width
+      theme: root.theme
+      label: "font family"
+      placeholder: "JetBrainsMono Nerd Font"
+      text: root.strAt("ui.fontFamily", "")
+      onEdited: function(value) { root.setPath("ui.fontFamily", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "24-hour clock"
+      checked: root.boolAt("ui.clock24h", true)
+      onToggled: function(value) { root.setPath("ui.clock24h", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "show seconds"
+      checked: root.boolAt("ui.showSeconds", true)
+      onToggled: function(value) { root.setPath("ui.showSeconds", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "show the ring time"
+      checked: root.boolAt("ui.showRingTime", true)
+      onToggled: function(value) { root.setPath("ui.showRingTime", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "show the countdown"
+      checked: root.boolAt("ui.showCountdown", true)
+      onToggled: function(value) { root.setPath("ui.showCountdown", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "show the date"
+      checked: root.boolAt("ui.showDate", false)
+      onToggled: function(value) { root.setPath("ui.showDate", value) }
+    }
+
+    Toggle {
+      width: parent.width
+      theme: root.theme
+      label: "pulse the border while the alarm rings"
+      hint: "off by default: a slow pulse is nice, a strobe is not"
+      checked: root.boolAt("ui.pulseOnRing", false)
+      onToggled: function(value) { root.setPath("ui.pulseOnRing", value) }
+    }
+
+    SectionHeader {
+      width: parent.width
+      theme: root.theme
+      text: "claude palette"
+    }
+
+    Repeater {
+      model: Palette.TOKENS
+
+      ColorField {
+        id: colorRow
+        required property var modelData
+
+        width: parent.width
+        theme: root.theme
+        token: String(colorRow.modelData)
+        value: root.strAt("ui.claudePalette." + String(colorRow.modelData), "")
+        onColorEdited: function(token, value) { root.setPath("ui.claudePalette." + token, value) }
+      }
+    }
+
+    Button {
+      theme: root.theme
+      text: "reset the claude palette"
+      onClicked: {
+        var preset = Palette.claudePreset()
+        for (var key in preset) {
+          if (preset.hasOwnProperty(key)) root.setPath("ui.claudePalette." + key, preset[key])
+        }
+      }
+    }
+
     // ---- safety -----------------------------------------------------------
     SectionHeader {
       width: parent.width
@@ -772,6 +896,12 @@ Item {
         font.pixelSize: Style.font.caption
       }
     }
+  }
+
+  Theme {
+    id: draftTheme
+    paletteOverride: root.draftPalette
+    uiOverride: root.draft.ui ? root.draft.ui : ({})
   }
 
   Theme { id: fallbackTheme }
