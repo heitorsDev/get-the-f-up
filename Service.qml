@@ -1,10 +1,14 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.Mpris
 import qs.Commons
 
+import "Audio.js" as Audio
+import "Camera.js" as Camera
 import "Challenge.js" as Challenge
 import "Config.js" as Config
+import "Display.js" as Display
 import "History.js" as History
 import "Lockdown.js" as Lockdown
 import "Palette.js" as Palette
@@ -20,7 +24,7 @@ import "Time.js" as Time
 //
 // The JS modules stay pure — they only build commands and parse output. Every
 // command that touches the machine is run through a Quickshell Process.
-Item {
+Scope {
   id: root
 
   // ---- host injection -------------------------------------------------------
@@ -38,6 +42,8 @@ Item {
   readonly property string historyPath: Config.historyPath(home)
   readonly property string activePath: Config.activePath(home)
   readonly property string emergencyPhrase: Lockdown.EMERGENCY_PHRASE
+  // The crash watchdog waits on this pid.
+  readonly property int shellPid: Quickshell.processId
 
   // ---- live state (the UI contract, docs/contracts.md) ----------------------
   readonly property string state: _state
@@ -58,6 +64,8 @@ Item {
   // The challenge engine state (Challenge.create) and the resolved preset.
   property var _engine: null
   property var _resolved: null
+  // The restore record mirrored to active.json (Lockdown.makeRecord).
+  property var _record: null
   property string _exitReason: ""
   // True once the challenge of the last session was completed; the CLI
   // `disarm` command is only allowed after that.
@@ -319,13 +327,86 @@ Item {
     return root.ok()
   }
 
-  // Everything that touches the machine happens after the pre-state capture.
+  // Everything that touches the machine happens after the pre-state capture,
+  // and the restore record is on disk before the first change is made, so a
+  // crash at any point leaves the watchdog something to undo.
   function setupSession() {
-    root.afterCapture()
+    var session = root.session
+    root.run(Lockdown.captureCommand(root.home, Display.BACKLIGHT_DEVICE), function(code, out) {
+      // The session can end while the capture runs (emergency exit, cap).
+      if (root.session !== session) return
+      var cap = Lockdown.parseCapture(out)
+      var brightness = Display.parseBrightness(cap.brightnessText)
+      var displayPlan = Display.plan(root.config.display,
+        { brightness: brightness, hyprsunsetRunning: cap.hyprsunsetRunning })
+      var lockdownPlan = Lockdown.plan(root.config.lockdown, cap)
+
+      root._record = Lockdown.makeRecord({
+        pid: root.shellPid,
+        startedAt: session.armedAt,
+        dryRun: session.dryRun,
+        display: root.config.display,
+        brightness: brightness,
+        hyprsunsetRunning: cap.hyprsunsetRunning,
+        previousGamma: Display.parseGamma(cap.gammaText),
+        displayPlan: displayPlan,
+        lockdownPlan: lockdownPlan
+      })
+      root.writeRecord()
+      if (!root.config.safety || root.config.safety.watchdog !== false) {
+        root.run(Lockdown.watchdogStartCommand(root.pluginDir, root.shellPid), function(exitCode) {
+          if (exitCode !== 0) console.warn("sleep-mode: the crash watchdog did not start")
+        })
+      }
+      root.applyLockdown(lockdownPlan)
+      root.applyDisplay(displayPlan)
+      root.openOverlay("sleep")
+    })
   }
 
-  function afterCapture() {
-    root.openOverlay("sleep")
+  // The restore record bin/sleep-mode-restore acts on.
+  function writeRecord() {
+    if (!root._record) return
+    root.run(Lockdown.writeFileCommand(root.activePath, JSON.stringify(root._record, null, 2) + "\n"))
+  }
+
+  // ---- display ----------------------------------------------------------------
+  function applyDisplay(plan) {
+    var steps = []
+    if (plan.startHyprsunset) steps.push({ cmd: Display.hyprsunsetStartCommand() })
+    if (plan.setBacklight) {
+      steps.push({ cmd: Display.brightnessSetPercentCommand(Display.BACKLIGHT_DEVICE, plan.backlightPercent) })
+    }
+    if (plan.dim) {
+      // A freshly started hyprsunset can clobber a value set before it
+      // finished booting, so the gamma command re-sends it several times.
+      steps.push({ cmd: Display.gammaApplyCommand(plan.gammaPercent, Display.GAMMA_TRIES, Display.GAMMA_INTERVAL_S) })
+    }
+    root.enqueue(steps)
+  }
+
+  // ---- lockdown ---------------------------------------------------------------
+  function applyLockdown(plan) {
+    root.enqueue([{ cmd: Lockdown.applyCommand(root.home, plan) }])
+    inhibitor.running = plan.holdInhibitor === true
+    if (plan.pauseMedia) root.pauseMedia()
+  }
+
+  function pauseMedia() {
+    var players = Mpris.players ? Mpris.players.values : []
+    var targets = Lockdown.pauseTargets(players)
+    for (var i = 0; i < targets.length; i++) {
+      var player = players[targets[i]]
+      if (player.canPause) player.pause()
+      else player.togglePlaying()
+    }
+  }
+
+  // Blocks the system idle action (screensaver, lock, suspend) for as long as
+  // it runs; the child also exits on its own when the shell dies.
+  Process {
+    id: inhibitor
+    command: Lockdown.inhibitCommand(root.shellPid)
   }
 
   // ---- the ring -------------------------------------------------------------
