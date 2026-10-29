@@ -413,14 +413,65 @@ Scope {
   function enterRinging(at) {
     if (root.state !== "armed" || !root.session) return
     if (root.session.ringingSince) return
-    root.session.ringingSince = at
+    // Replace the object: a nested write would not notify the UI bindings.
+    var next = {}
+    for (var key in root.session) next[key] = root.session[key]
+    next.ringingSince = at
+    root.session = next
     root._state = "ringing"
     root.ringing()
     root.startAlarm()
   }
 
+  // Resolve the sink, remember its volume and mute, force them, then loop the
+  // alarm. Each stage re-checks the state so an exit mid-chain stops it.
   function startAlarm() {
-    // Filled in by the audio stage.
+    root.run(Audio.sinkProbeCommand(), function(code, out) {
+      if (root.state !== "ringing") return
+      var sections = Lockdown.splitSections(out)
+      var picked = Audio.resolveSink(root.config.audio.sink,
+        Audio.parseSinkList(sections.sinks), Audio.parseDefaultSink(sections["default"]))
+      if (picked.reason) console.warn("sleep-mode: " + picked.reason)
+      var sink = picked.sink
+
+      root.run(Audio.captureCommand(sink), function(code2, out2) {
+        if (root.state !== "ringing") return
+        var captured = Lockdown.splitSections(out2)
+        // Record the sink's previous volume and mute before changing them, so
+        // the restore script (and the watchdog) can put them back.
+        root._record = Lockdown.withAudio(root._record || Lockdown.makeRecord({}), sink,
+          Audio.parseVolume(captured.volume), Audio.parseMute(captured.mute), root.config.audio)
+        root.writeRecord()
+        root.run(Audio.forceCommand(sink, root.config.audio))
+
+        var candidates = Audio.soundCandidates(root.config.audio, root.pluginDir)
+        root.run(Audio.pickSoundCommand(candidates), function(code3, out3) {
+          if (root.state !== "ringing") return
+          var file = Audio.parsePickedSound(out3)
+          if (!file) {
+            root.lastError = "no alarm sound could be found"
+            return
+          }
+          alarm.command = Audio.playerCommand(sink, file)
+          alarm.running = true
+        })
+      })
+    })
+  }
+
+  function stopAlarm() {
+    alarm.running = false
+  }
+
+  // The looping alarm. Its own Process, not the shared runner, because it
+  // never exits on its own.
+  Process {
+    id: alarm
+    onStarted: {
+      if (!root._record) return
+      root._record = Lockdown.withPlayerPid(root._record, alarm.processId)
+      root.writeRecord()
+    }
   }
 
   // ---- the challenge --------------------------------------------------------
