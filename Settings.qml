@@ -4,6 +4,8 @@ import QtQuick
 import qs.Commons
 import "ui"
 import "Config.js" as Config
+import "Time.js" as Time
+import "History.js" as History
 import "Palette.js" as Palette
 
 // The settings panel (SPEC §9, §12).
@@ -42,6 +44,10 @@ Item {
   }
 
   readonly property var draftPalette: Palette.resolve(root.draft.ui ? root.draft.ui : ({}), Color)
+
+  readonly property var historyList: root.service && root.service.historyList ? root.service.historyList : []
+  readonly property var historyRecent: History.recent(root.historyList, 10)
+  readonly property var historyTotals: History.totals(root.historyList)
 
   // ---- draft plumbing ----------------------------------------------------
   function reload() {
@@ -847,6 +853,49 @@ Item {
       hint: "restores the display and silences the alarm if the shell dies mid-sleep"
       checked: root.boolAt("safety.watchdog", true)
       onToggled: function(value) { root.setPath("safety.watchdog", value) }
+    }
+
+    // ---- history ----------------------------------------------------------
+    SectionHeader {
+      width: parent.width
+      theme: root.theme
+      text: "history"
+    }
+
+    Text {
+      width: parent.width
+      wrapMode: Text.WordWrap
+      textFormat: Text.PlainText
+      text: root.historyTotals
+        ? root.historyTotals.sessions + " sessions  ·  "
+          + Time.formatDuration(root.historyTotals.sleptMs) + " asleep  ·  "
+          + root.historyTotals.earlyExits + " early exits"
+        : ""
+      color: root.theme.dim
+      font.family: root.theme.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
+    Repeater {
+      model: root.historyRecent
+
+      Text {
+        id: historyRow
+        required property var modelData
+
+        width: parent.width
+        wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
+        text: {
+          var record = historyRow.modelData
+          if (!record) return ""
+          var when = record.armedAt ? Time.formatDate(record.armedAt) + " " + Time.formatClock(record.armedAt, { h24: true, seconds: false }) : ""
+          return when + "  ·  " + History.summary(record)
+        }
+        color: root.theme.faint
+        font.family: root.theme.fontFamily
+        font.pixelSize: Style.font.caption
+      }
     }
 
     // ---- save -------------------------------------------------------------
