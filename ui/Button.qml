@@ -1,7 +1,7 @@
 import QtQuick
 import qs.Commons
 
-// The Sleep Mode button: monospace label in a 1 px QML-drawn border.
+// The Get The F Up button: monospace label in a 1 px QML-drawn border.
 //   kind "normal" | "accent" | "danger" | "ghost"
 Rectangle {
   id: root

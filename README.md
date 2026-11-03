@@ -1,4 +1,4 @@
-# Sleep Mode
+# Get The F Up
 
 An Omarchy plugin that turns your machine into an **alarm clock instead of a
 computer**.
@@ -30,20 +30,33 @@ challenge. You can also leave early by completing it.
 
 ---
 
+## Requirements
+
+Omarchy 4 (Quattro shell). The plugin calls these external tools, all of which ship
+with a stock Omarchy install:
+
+- `hyprctl`, `hyprsunset` — display dimming and gamma
+- `brightnessctl` — backlight
+- `pactl`, `wpctl` — volume and output selection
+- `pw-play`, `paplay` or `mpv` — alarm playback (first one found)
+- `ffmpeg` — camera capture, only when the light gate is enabled
+- `systemd-run`, `systemd-inhibit` — crash watchdog and idle/sleep inhibition
+- `jq`, `omarchy-notification-send`
+
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/heitorsDev/omarchy-sleep-mode.git --enable
+omarchy plugin add https://github.com/heitorsDev/get-the-f-up.git --enable
 ```
 
 ## Remove
 
 ```bash
-omarchy plugin remove io.github.heitorsdev.sleep-mode
+omarchy plugin remove io.github.heitorsdev.get-the-f-up
 ```
 
-Your settings (`~/.config/omarchy/sleep-mode/`) and history
-(`~/.local/state/omarchy/sleep-mode/`) are left in place; delete them by hand.
+Your settings (`~/.config/omarchy/get-the-f-up/`) and history
+(`~/.local/state/omarchy/get-the-f-up/`) are left in place; delete them by hand.
 
 ---
 
@@ -52,13 +65,13 @@ Your settings (`~/.config/omarchy/sleep-mode/`) and history
 The plugin exposes a headless IPC target, so external bars and scripts can drive it:
 
 ```bash
-omarchy-shell sleep-mode status
-omarchy-shell sleep-mode arm   '{"time":"07:30","challenge":"standard","reps":3}'
-omarchy-shell sleep-mode arm   '{"duration":"45m","challenge":"thorough","reps":2}'
-omarchy-shell sleep-mode open  '{}'
-omarchy-shell sleep-mode history
-omarchy-shell sleep-mode preview
-omarchy-shell sleep-mode dryrun
+omarchy-shell get-the-f-up status
+omarchy-shell get-the-f-up arm   '{"time":"07:30","challenge":"standard","reps":3}'
+omarchy-shell get-the-f-up arm   '{"duration":"45m","challenge":"thorough","reps":2}'
+omarchy-shell get-the-f-up open  '{}'
+omarchy-shell get-the-f-up history
+omarchy-shell get-the-f-up preview
+omarchy-shell get-the-f-up dryrun
 ```
 
 `disarm` is rejected unless the challenge is done — the point of the mode is that
@@ -68,7 +81,7 @@ the only exits are N completed challenges or the crash watchdog.
 
 ## Configuration
 
-`~/.config/omarchy/sleep-mode/config.json` — every key has a default, so a partial
+`~/.config/omarchy/get-the-f-up/config.json` — every key has a default, so a partial
 file is valid. See [`SPEC.md`](./SPEC.md#16-configuration-reference) for the full
 reference.
 

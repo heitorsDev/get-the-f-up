@@ -180,7 +180,7 @@ Item {
               anchors.left: parent.left
               anchors.verticalCenter: parent.verticalCenter
               textFormat: Text.PlainText
-              text: "sleep mode"
+              text: "get the f up"
               color: root.theme.accent
               font.family: root.theme.fontFamily
               font.pixelSize: Style.font.bodySmall

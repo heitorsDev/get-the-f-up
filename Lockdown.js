@@ -2,10 +2,10 @@
 
 // Lockdown and session plumbing: idle suppression, notification DND, bar
 // hiding, media pause selection, the crash watchdog unit, and the restore
-// record shared with bin/sleep-mode-restore. Pure builders and parsers.
+// record shared with bin/get-the-f-up-restore. Pure builders and parsers.
 
-var INHIBIT_MARKER = "omarchy-sleep-mode-inhibit"
-var WATCHDOG_UNIT = "omarchy-sleep-mode-watchdog"
+var INHIBIT_MARKER = "omarchy-get-the-f-up-inhibit"
+var WATCHDOG_UNIT = "omarchy-get-the-f-up-watchdog"
 var EMERGENCY_PHRASE = "i am awake"
 // Environment the transient watchdog unit needs to reach Hyprland, PipeWire
 // and the shell. Only variables set in the shell's environment are passed.
@@ -70,7 +70,7 @@ function captureCommand(home, backlightDevice) {
     "echo '@@dnd'; omarchy-shell notifications dndState 2>/dev/null",
     "exit 0"
   ].join("\n")
-  return ["bash", "-c", script, "sleep-mode-capture", String(home), String(backlightDevice || "intel_backlight")]
+  return ["bash", "-c", script, "get-the-f-up-capture", String(home), String(backlightDevice || "intel_backlight")]
 }
 
 // "on"/"off" from `omarchy-shell notifications dndState`; null when unreachable.
@@ -129,14 +129,14 @@ function applyCommand(home, lockdownPlan) {
     lines.push("omarchy-shell -q omarchy.indicators refresh")
   }
   lines.push("exit 0")
-  return ["bash", "-c", lines.join("\n"), "sleep-mode-lockdown", String(home)]
+  return ["bash", "-c", lines.join("\n"), "get-the-f-up-lockdown", String(home)]
 }
 
 // Held for the whole session. The child exits on its own when the shell
 // process dies, so a crash never leaves an orphaned inhibitor behind.
 function inhibitCommand(shellPid) {
   return ["systemd-inhibit", "--what=idle", "--who=" + INHIBIT_MARKER,
-    "--why=Sleep mode is active", "--mode=block",
+    "--why=Get The F Up is active", "--mode=block",
     "bash", "-c", "while kill -0 \"$1\" 2>/dev/null; do sleep 5; done", INHIBIT_MARKER, String(shellPid)]
 }
 
@@ -159,7 +159,7 @@ function pauseTargets(players) {
 
 // ------------------------------------------------------ restore record
 
-// The record bin/sleep-mode-restore acts on. Written before any change is
+// The record bin/get-the-f-up-restore acts on. Written before any change is
 // made, so every flag describes an intended change; the restore steps are
 // idempotent and safe if the change never happened.
 // opts: { pid, startedAt, dryRun, display: displayConfig, audio: audioConfig,
@@ -224,7 +224,7 @@ function mkdirCommand(dirs) {
 function writeFileCommand(path, text) {
   return ["bash", "-c",
     "mkdir -p \"$(dirname \"$1\")\" && printf '%s' \"$2\" > \"$1.tmp\" && mv -f \"$1.tmp\" \"$1\"",
-    "sleep-mode-write", String(path), String(text)]
+    "get-the-f-up-write", String(path), String(text)]
 }
 
 function existsCommand(path) {
@@ -232,7 +232,7 @@ function existsCommand(path) {
 }
 
 function restoreCommand(pluginDir) {
-  return ["bash", String(pluginDir) + "/bin/sleep-mode-restore"]
+  return ["bash", String(pluginDir) + "/bin/get-the-f-up-restore"]
 }
 
 // Replace any previous watchdog unit, then start a fresh one that waits for
@@ -244,10 +244,10 @@ function watchdogStartCommand(pluginDir, shellPid) {
     "systemctl --user reset-failed \"$unit.service\" >/dev/null 2>&1",
     "args=()",
     "for v in \"$@\"; do [ -n \"${!v:-}\" ] && args+=(\"--setenv=$v\"); done",
-    "exec systemd-run --user --quiet --collect --unit=\"$unit\" --description='Sleep Mode crash watchdog' \"${args[@]}\" -- bash \"$watchdog\" \"$pid\""
+    "exec systemd-run --user --quiet --collect --unit=\"$unit\" --description='Get The F Up crash watchdog' \"${args[@]}\" -- bash \"$watchdog\" \"$pid\""
   ].join("\n")
-  return ["bash", "-c", script, "sleep-mode-watchdog-start", WATCHDOG_UNIT,
-    String(pluginDir) + "/bin/sleep-mode-watchdog", String(shellPid)].concat(WATCHDOG_ENV)
+  return ["bash", "-c", script, "get-the-f-up-watchdog-start", WATCHDOG_UNIT,
+    String(pluginDir) + "/bin/get-the-f-up-watchdog", String(shellPid)].concat(WATCHDOG_ENV)
 }
 
 function watchdogStopCommand() {
@@ -255,7 +255,7 @@ function watchdogStopCommand() {
 }
 
 function toastCommand(headline, body) {
-  var cmd = ["omarchy-notification-send", "-g", "\udb81\udcb2", String(headline || "Sleep mode")]
+  var cmd = ["omarchy-notification-send", "-g", "\udb81\udcb2", String(headline || "Get The F Up")]
   if (body) cmd.push(String(body))
   return cmd
 }

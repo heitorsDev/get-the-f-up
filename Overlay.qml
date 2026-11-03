@@ -28,7 +28,7 @@ Item {
   property bool opened: false
   property string mode: "sleep" // "sleep" | "preview"
 
-  readonly property string pluginId: manifest && manifest.id ? String(manifest.id) : "io.github.heitorsdev.sleep-mode"
+  readonly property string pluginId: manifest && manifest.id ? String(manifest.id) : "io.github.heitorsdev.get-the-f-up"
 
   // ---- service -------------------------------------------------------------
   property var service: null
@@ -195,7 +195,7 @@ Item {
     root.mode = (payload.mode === "preview" || servicePreviewing) ? "preview" : "sleep"
     if (root.mode === "preview") root.previewRingAt = Date.now() + (6 * 60 + 15) * 60 * 1000
     if (root.mode === "preview") root.previewRingingSince = Date.now() - (3 * 60 + 12) * 1000
-    // A sleep-mode open while idle would be an undismissable black screen.
+    // A get-the-f-up open while idle would be an undismissable black screen.
     // Refuse it; onActiveChanged opens us as soon as the mode is armed.
     if (root.mode === "sleep" && !root.active) {
       if (root.opened) root.forceClose()
@@ -482,7 +482,7 @@ Item {
         color: theme.background
         exclusionMode: ExclusionMode.Ignore
 
-        WlrLayershell.namespace: "omarchy-sleep-mode"
+        WlrLayershell.namespace: "omarchy-get-the-f-up"
         WlrLayershell.layer: WlrLayer.Overlay
         // Preview never captures input; only the focused output's surface
         // ever takes the keyboard, exclusively only while the mode is active

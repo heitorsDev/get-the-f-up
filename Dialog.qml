@@ -142,7 +142,7 @@ Item {
   function arm() {
     root.errorText = ""
     if (!root.service || typeof root.service.arm !== "function") {
-      root.errorText = "the sleep-mode service is not running"
+      root.errorText = "the get-the-f-up service is not running"
       return
     }
     var result = root.service.arm(root.payload)

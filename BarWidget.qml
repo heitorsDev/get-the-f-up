@@ -20,9 +20,9 @@ import "Time.js" as Time
 //
 HostUi.BarWidget {
   id: root
-  moduleName: "io.github.heitorsdev.sleep-mode"
+  moduleName: "io.github.heitorsdev.get-the-f-up"
 
-  readonly property string pluginId: "io.github.heitorsdev.sleep-mode"
+  readonly property string pluginId: "io.github.heitorsdev.get-the-f-up"
 
   // ---- service -----------------------------------------------------------
   // The service is reached through the host's shell facade. For a third-party
@@ -85,7 +85,7 @@ HostUi.BarWidget {
       : (root.bar ? root.bar.barForeground : Color.foreground))
 
   readonly property string tooltipText: {
-    if (!root.armed && !root.ringing) return "Sleep mode"
+    if (!root.armed && !root.ringing) return "Get The F Up"
     var parts = []
     if (root.ringAt > 0) parts.push("rings at " + Time.formatClock(root.ringAt, { h24: root.clock24h, seconds: false }))
     if (root.armed && root.ringAt > 0) {
@@ -94,7 +94,7 @@ HostUi.BarWidget {
       parts.push(Time.formatElapsed(Math.max(0, root.now - root.ringingSince)))
     }
     if (root.presetName !== "") parts.push(root.presetName)
-    if (parts.length === 0) return "Sleep mode"
+    if (parts.length === 0) return "Get The F Up"
     return parts.join("  ·  ")
   }
 

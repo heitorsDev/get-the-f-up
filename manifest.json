@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.heitorsdev.sleep-mode",
-  "name": "Sleep Mode",
+  "id": "io.github.heitorsdev.get-the-f-up",
+  "name": "Get The F Up",
   "version": "0.1.0",
   "author": "Heitor Santos",
   "license": "MIT",
@@ -14,7 +14,7 @@
     "overlay": "Overlay.qml"
   },
   "barWidget": {
-    "displayName": "Sleep Mode",
+    "displayName": "Get The F Up",
     "description": "Arm the sleep screen and see the countdown to the alarm",
     "category": "Productivity",
     "allowMultiple": false,
@@ -23,7 +23,7 @@
   "metadata": {
     "category": "Productivity",
     "tags": ["bar", "quickshell", "power-management"],
-    "documentation": "https://github.com/heitorsDev/omarchy-sleep-mode#readme",
-    "issues": "https://github.com/heitorsDev/omarchy-sleep-mode/issues"
+    "documentation": "https://github.com/heitorsDev/get-the-f-up#readme",
+    "issues": "https://github.com/heitorsDev/get-the-f-up/issues"
   }
 }

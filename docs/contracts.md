@@ -13,7 +13,7 @@ it documents the change in its final report instead of silently diverging.
 | Track | Owns (creates/edits only these) |
 | --- | --- |
 | **logic** | `Config.js`, `History.js`, `Steps.js`, `Challenge.js`, `Time.js`, `Palette.js`, `package.json`, `tests/config.test.js`, `tests/history.test.js`, `tests/steps.test.js`, `tests/challenge.test.js`, `tests/time.test.js`, `tests/palette.test.js`, `.github/workflows/test.yml` |
-| **service** | `Service.qml`, `Display.js`, `Audio.js`, `Camera.js`, `Lockdown.js`, `bin/sleep-mode-watchdog`, `bin/sleep-mode-restore`, `assets/alarm.oga`, `tests/display.test.js`, `tests/audio.test.js`, `tests/camera.test.js`, `tests/lockdown.test.js` |
+| **service** | `Service.qml`, `Display.js`, `Audio.js`, `Camera.js`, `Lockdown.js`, `bin/get-the-f-up-watchdog`, `bin/get-the-f-up-restore`, `assets/alarm.oga`, `tests/display.test.js`, `tests/audio.test.js`, `tests/camera.test.js`, `tests/lockdown.test.js` |
 | **ui** | `Overlay.qml`, `BarWidget.qml`, `Panel.qml`, `Dialog.qml`, `Settings.qml`, everything under `ui/` (shared QML components: sleep screen, challenge view, step editor, buttons, inputs …) |
 | **lead** | `manifest.json`, `README.md`, `docs/*`, `preview.png`, `LICENSE` |
 
@@ -50,8 +50,8 @@ merge(partial)                   -> deep-merge partial over defaults(); arrays a
                                     `challenge.presets` entries replace, never merge
 parse(text)                      -> { config, error }  // bad/empty JSON -> defaults + error string
 serialize(config)                -> pretty JSON string (2-space indent, trailing newline)
-configPath(home)                 -> home + "/.config/omarchy/sleep-mode/config.json"
-stateDir(home)                   -> home + "/.local/state/omarchy/sleep-mode"
+configPath(home)                 -> home + "/.config/omarchy/get-the-f-up/config.json"
+stateDir(home)                   -> home + "/.local/state/omarchy/get-the-f-up"
 historyPath(home)                -> stateDir(home) + "/history.json"
 activePath(home)                 -> stateDir(home) + "/active.json"   // watchdog restore record
 presetNames(config)              -> array of preset names
@@ -171,7 +171,7 @@ Shapes are the service track's call, but keep them testable with `node --test`
 ## `Service.qml` (the live object)
 
 Reached from the bar widget and the overlay with
-`shell.serviceFor("io.github.heitorsdev.sleep-mode")` (the injected `shell` facade;
+`shell.serviceFor("io.github.heitorsdev.get-the-f-up")` (the injected `shell` facade;
 see `/usr/share/omarchy/shell/services/PluginShellApi.qml`). It may be `null`
 briefly at startup — UI must tolerate that and rebind.
 
@@ -214,7 +214,7 @@ Signals: `ringing()`, `finished(record)` — the UI may use them for animation o
 
 ### IPC
 
-`IpcHandler { target: "sleep-mode" }` with the SPEC.md §2 methods, each taking and
+`IpcHandler { target: "get-the-f-up" }` with the SPEC.md §2 methods, each taking and
 returning JSON strings that wrap the methods above (`status`, `arm`, `disarm`,
 `open`, `history`, `preview`, `dryrun`). `disarm` succeeds only if the challenge is
 done.

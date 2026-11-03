@@ -20,7 +20,7 @@ for the ones I didn't respond."
 | A3 | Bar control surface | **Both** a headless CLI and a QML bar widget | Waybar no longer exists on Omarchy 4. The CLI is the real interface; the widget is one front end. Makes the plugin publishable to non-Quattro setups. |
 | A4 | Plugin shape | `service` + `bar-widget` + `overlay` kinds | The service owns state; the overlay is the sleep screen; the widget is the toggle. |
 | A5 | Settings surface | Plugin's own panel | Omarchy 4 ships **no** renderer for `barWidget.schema` — it is inert metadata. Confirmed in `shell.qml:1400`. |
-| A6 | Config storage | Plugin-owned `~/.config/omarchy/sleep-mode/config.json` | `shell.shellConfig` is `undefined` for third-party plugins (the `PluginShellApi` facade lacks it), so the `shell.json` inline read path is broken — `border-fx` and `rice-bar` are silently running on defaults today. |
+| A6 | Config storage | Plugin-owned `~/.config/omarchy/get-the-f-up/config.json` | `shell.shellConfig` is `undefined` for third-party plugins (the `PluginShellApi` facade lacks it), so the `shell.json` inline read path is broken — `border-fx` and `rice-bar` are silently running on defaults today. |
 
 ## Challenges
 
@@ -83,7 +83,7 @@ for the ones I didn't respond."
 | # | Decision | Choice | Rationale |
 | --- | --- | --- | --- |
 | T1 | Input format | **Both** wall-clock (`07:30`) and duration (`45m`) | A sleep alarm is naturally one or the other. |
-| T2 | Nightly auto-arm | **Out of scope for v1** | Sleep mode is turned on deliberately. |
+| T2 | Nightly auto-arm | **Out of scope for v1** | Get The F Up is turned on deliberately. |
 
 ## Test modes
 
@@ -96,7 +96,7 @@ for the ones I didn't respond."
 
 | # | Decision | Choice | Rationale |
 | --- | --- | --- | --- |
-| P1 | Identity | `io.github.heitorsdev.sleep-mode` · repo `heitorsDev/omarchy-sleep-mode` · display name "Sleep Mode" · author "Heitor Santos" | Marketplace ids are permanent — chosen now, before publication. |
+| P1 | Identity | `io.github.heitorsdev.get-the-f-up` · repo `heitorsDev/get-the-f-up` · display name "Get The F Up" · author "Heitor Santos" | Marketplace ids are permanent — chosen now, before publication. |
 | P2 | License | MIT | — |
 | P3 | Marketplace | Publish to omarchyplugins.com (Productivity; tags `bar`, `quickshell`, `power-management`) | Needs root `preview.png`, root README, license file, unique id. |
 

@@ -1,7 +1,7 @@
 .pragma library
 
 // Config defaults, merging, parsing and paths for
-// ~/.config/omarchy/sleep-mode/config.json. Pure: no I/O. See SPEC.md §16.
+// ~/.config/omarchy/get-the-f-up/config.json. Pure: no I/O. See SPEC.md §16.
 
 var CONFIG_VERSION = 1
 
@@ -212,11 +212,11 @@ function serialize(config) {
 }
 
 function configPath(home) {
-  return home + "/.config/omarchy/sleep-mode/config.json"
+  return home + "/.config/omarchy/get-the-f-up/config.json"
 }
 
 function stateDir(home) {
-  return home + "/.local/state/omarchy/sleep-mode"
+  return home + "/.local/state/omarchy/get-the-f-up"
 }
 
 function historyPath(home) {

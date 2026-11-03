@@ -77,7 +77,7 @@ test("volume and mute commands", () => {
 test("forceCommand honors unmute and volume", () => {
   let c = Audio.forceCommand(ALSA, { volumePercent: 70, unmute: true })
   assert.match(c[2], /set-sink-mute "\$1" 0/)
-  assert.deepEqual(c.slice(3), ["sleep-mode-audio", ALSA, "70%"])
+  assert.deepEqual(c.slice(3), ["get-the-f-up-audio", ALSA, "70%"])
   c = Audio.forceCommand(ALSA, { volumePercent: 70, unmute: false })
   assert.doesNotMatch(c[2], /set-sink-mute/)
   assert.equal(Audio.forceCommand(ALSA, {})[5], "80%")
@@ -91,7 +91,7 @@ test("soundCandidates order: user, bundled, freedesktop", () => {
 })
 
 test("pickSoundCommand prints the first readable file", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sleep-mode-audio-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "get-the-f-up-audio-"))
   const real = path.join(dir, "a.oga")
   fs.writeFileSync(real, "x")
   const cmd = Audio.pickSoundCommand([path.join(dir, "missing.ogg"), real])

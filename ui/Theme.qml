@@ -1,6 +1,6 @@
 import QtQuick
 
-// Palette + typography resolver shared by every Sleep Mode surface.
+// Palette + typography resolver shared by every Get The F Up surface.
 //
 // Reads `service.palette` (Palette.resolve output) and `service.config.ui`.
 // When the service is not up yet (it can be null briefly at startup) every

@@ -9,10 +9,10 @@ unfinished work.
 
 **Goal:** an installable plugin that validates and appears in `omarchy plugin list`.
 
-- `manifest.json` — `schemaVersion: 1`, id `io.github.heitorsdev.sleep-mode`,
+- `manifest.json` — `schemaVersion: 1`, id `io.github.heitorsdev.get-the-f-up`,
   kinds `["service", "bar-widget", "overlay"]`, `keepLoaded: true`, entry points
   `Service.qml` / `BarWidget.qml` / `Overlay.qml`.
-- Stub `Service.qml` with an `IpcHandler { target: "sleep-mode" }` returning
+- Stub `Service.qml` with an `IpcHandler { target: "get-the-f-up" }` returning
   `status()` → `"{}"`.
 - Stub `BarWidget.qml` extending `qs.Ui.BarWidget` with a `BarIconButton`.
 - Stub `Overlay.qml` with the `Variants` + `PanelWindow` skeleton, black background,
@@ -28,7 +28,7 @@ clicking it opens the overlay.
 
 **Goal:** the widget and the overlay agree on state, driven by the service.
 
-- `Config.js` — read/write `~/.config/omarchy/sleep-mode/config.json`, with defaults
+- `Config.js` — read/write `~/.config/omarchy/get-the-f-up/config.json`, with defaults
   merged in for missing keys, and a `version` field.
 - `Service.qml` — the state machine (`idle` / `armed` / `ringing`), a `Timer` for the
   countdown, and the `IpcHandler` methods from the spec.
@@ -124,7 +124,7 @@ the mode; every toggle independently changes behavior.
 
 **Goal:** no way to be permanently locked out; a record of what happened.
 
-- Watchdog: `systemd-run --user --unit=sleep-mode-watchdog ...` armed at mode start,
+- Watchdog: `systemd-run --user --unit=get-the-f-up-watchdog ...` armed at mode start,
   disarmed at every normal exit. It restores display state, kills audio, and clears
   the `stay-awake` file.
 - `History.js` — append a session record on exit; read the last N for the panel.
@@ -145,7 +145,7 @@ alarm; the toast appears; a history entry is written with the correct fields.
 - The step builder: add step → pick type → set parameters → reorder.
 - The palette editor: every color in the Claude Code preset is editable; a "theme"
   option follows the live Omarchy theme.
-- All writes go to `~/.config/omarchy/sleep-mode/config.json`.
+- All writes go to `~/.config/omarchy/get-the-f-up/config.json`.
 
 **Verify:** changing any setting takes effect without a shell restart; the config
 file round-trips; a partial config file still loads.

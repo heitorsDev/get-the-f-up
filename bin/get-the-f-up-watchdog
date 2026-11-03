@@ -7,7 +7,7 @@ set -u
 
 pid="${1:-}"
 case "$pid" in
-  ''|*[!0-9]*) echo "usage: sleep-mode-watchdog <shell-pid>" >&2; exit 2 ;;
+  ''|*[!0-9]*) echo "usage: get-the-f-up-watchdog <shell-pid>" >&2; exit 2 ;;
 esac
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,4 +16,4 @@ while kill -0 "$pid" 2>/dev/null; do
   sleep 2
 done
 
-exec bash "${here}/sleep-mode-restore"
+exec bash "${here}/get-the-f-up-restore"

@@ -121,19 +121,19 @@ test("emergencyAccepted needs the toggle and the phrase", () => {
   assert.equal(Lockdown.emergencyAccepted({ emergencyExit: true }, "nope"), false)
 })
 
-// ------------------------------------------------- bin/sleep-mode-restore
+// ------------------------------------------------- bin/get-the-f-up-restore
 // Run the real script against a scratch $HOME with every system command
 // replaced by a logging stub, so nothing on the live desktop is touched.
 
 const hasJq = spawnSync("jq", ["--version"]).status === 0
-const restoreScript = path.join(__dirname, "..", "bin", "sleep-mode-restore")
+const restoreScript = path.join(__dirname, "..", "bin", "get-the-f-up-restore")
 
 function sandbox() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "sleep-mode-test-"))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "get-the-f-up-test-"))
   const home = path.join(root, "home")
   const stubs = path.join(root, "stubs")
   const log = path.join(root, "calls.log")
-  fs.mkdirSync(path.join(home, ".local/state/omarchy/sleep-mode"), { recursive: true })
+  fs.mkdirSync(path.join(home, ".local/state/omarchy/get-the-f-up"), { recursive: true })
   fs.mkdirSync(path.join(home, ".local/state/omarchy/indicators"), { recursive: true })
   fs.mkdirSync(path.join(home, ".local/state/omarchy/toggles"), { recursive: true })
   fs.mkdirSync(stubs)
@@ -144,7 +144,7 @@ function sandbox() {
   }
   return {
     home, log,
-    active: path.join(home, ".local/state/omarchy/sleep-mode/active.json"),
+    active: path.join(home, ".local/state/omarchy/get-the-f-up/active.json"),
     stayAwake: path.join(home, ".local/state/omarchy/indicators/stay-awake"),
     barOff: path.join(home, ".local/state/omarchy/toggles/bar-off"),
     run() {

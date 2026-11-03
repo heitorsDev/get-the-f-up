@@ -8,7 +8,7 @@
 
 // Every alarm player process carries this marker in its argv so the restore
 // script can find and kill it even after the shell crashed.
-var PLAYER_MARKER = "omarchy-sleep-mode-alarm"
+var PLAYER_MARKER = "omarchy-get-the-f-up-alarm"
 var FREEDESKTOP_ALARM = "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
 
 function listSinksCommand() {
@@ -65,7 +65,7 @@ function sinkProbeCommand() {
 function captureCommand(sink) {
   return ["bash", "-c",
     "echo '@@volume'; pactl get-sink-volume \"$1\" 2>/dev/null; echo '@@mute'; pactl get-sink-mute \"$1\" 2>/dev/null; exit 0",
-    "sleep-mode-audio", String(sink || "")]
+    "get-the-f-up-audio", String(sink || "")]
 }
 
 // "Volume: front-left: 52428 /  80% / -5.81 dB,   front-right: 52428 /  80% / -5.81 dB"
@@ -116,7 +116,7 @@ function forceCommand(sink, audioConfig) {
   var script = ""
   if (cfg.unmute !== false) script += "pactl set-sink-mute \"$1\" 0; "
   script += "pactl set-sink-volume \"$1\" \"$2\"; exit 0"
-  return ["bash", "-c", script, "sleep-mode-audio", String(sink),
+  return ["bash", "-c", script, "get-the-f-up-audio", String(sink),
     clampVolume(cfg.volumePercent === undefined ? 80 : cfg.volumePercent) + "%"]
 }
 
@@ -134,7 +134,7 @@ function soundCandidates(audioConfig, pluginDir) {
 // Prints the first readable candidate (empty output if none).
 function pickSoundCommand(candidates) {
   return ["bash", "-c", "for f in \"$@\"; do [ -r \"$f\" ] && { printf '%s\\n' \"$f\"; exit 0; }; done; exit 1",
-    "sleep-mode-sound"].concat(candidates || [])
+    "get-the-f-up-sound"].concat(candidates || [])
 }
 
 function parsePickedSound(text) {

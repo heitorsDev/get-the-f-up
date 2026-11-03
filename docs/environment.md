@@ -62,8 +62,8 @@ From `shell.qml:627-656`, a third-party plugin may only summon/hide/toggle:
 
 - A **service** is a headless singleton. `shell.callIfLoaded` resolves **only**
   `panelLoaders[id]` — so `omarchy-shell shell call` cannot invoke a service. Services
-  expose their own IPC target instead: `IpcHandler { target: "sleep-mode" }`, invoked
-  as `omarchy-shell sleep-mode <method> [args]`.
+  expose their own IPC target instead: `IpcHandler { target: "get-the-f-up" }`, invoked
+  as `omarchy-shell get-the-f-up <method> [args]`.
 - A **panel**/**overlay** must implement `open(payloadJson)`, `close()`, and expose
   `opened` as a bool. `toggle()` and `closeForPopoutSwitch()` are conventions, not
   host requirements.
@@ -101,7 +101,7 @@ Variants {
       visible: root.opened
       color: "transparent"
       exclusionMode: ExclusionMode.Ignore
-      WlrLayershell.namespace: "omarchy-sleep-mode"
+      WlrLayershell.namespace: "omarchy-get-the-f-up"
       WlrLayershell.layer: WlrLayer.Overlay
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
       anchors { top: true; bottom: true; left: true; right: true }

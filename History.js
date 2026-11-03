@@ -1,7 +1,7 @@
 .pragma library
 .import "Time.js" as Time
 
-// Session history for ~/.local/state/omarchy/sleep-mode/history.json.
+// Session history for ~/.local/state/omarchy/get-the-f-up/history.json.
 // Pure: data in, data out. See SPEC.md §12.
 
 var DEFAULT_MAX = 500

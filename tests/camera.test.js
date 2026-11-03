@@ -98,17 +98,17 @@ test("liveCommand opens the camera once, writes only under the runtime dir and i
   assert.match(script, /exec timeout -k 2 "\$cap" ffmpeg/)
   assert.match(script, /-atomic_writing 1 "\$dir\/preview\.jpg"/)
   assert.match(script, /mkdir -p -m 700/)
-  assert.deepEqual(cmd.slice(4), ["/run/user/1000/omarchy-sleep-mode", "/dev/video2", "3", "600"])
+  assert.deepEqual(cmd.slice(4), ["/run/user/1000/omarchy-get-the-f-up", "/dev/video2", "3", "600"])
 })
 
 test("liveCommand falls back to the default device and fps", () => {
   const cmd = Camera.liveCommand("", "/tmp", undefined)
-  assert.deepEqual(cmd.slice(4), ["/tmp/omarchy-sleep-mode", "/dev/video0", "3", "600"])
+  assert.deepEqual(cmd.slice(4), ["/tmp/omarchy-get-the-f-up", "/dev/video0", "3", "600"])
 })
 
 test("previewFile and cleanupCommand share one directory", () => {
-  assert.equal(Camera.previewFile("/run/user/1000"), "/run/user/1000/omarchy-sleep-mode/preview.jpg")
-  assert.deepEqual(Camera.cleanupCommand("/run/user/1000"), ["rm", "-rf", "/run/user/1000/omarchy-sleep-mode"])
+  assert.equal(Camera.previewFile("/run/user/1000"), "/run/user/1000/omarchy-get-the-f-up/preview.jpg")
+  assert.deepEqual(Camera.cleanupCommand("/run/user/1000"), ["rm", "-rf", "/run/user/1000/omarchy-get-the-f-up"])
 })
 
 test("parseLiveLine reads the luma statistics and ignores everything else", () => {
@@ -141,7 +141,7 @@ test("verdict compares a live reading with the saved thresholds", () => {
 // ------------------------------------------------ race-free one-shot capture
 
 function withStubbedFfmpeg(script, run) {
-  const dir = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "sleep-mode-cam-"))
+  const dir = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "get-the-f-up-cam-"))
   try {
     const file = path.join(dir, "ffmpeg")
     fs.writeFileSync(file, "#!/bin/bash\n" + script)
@@ -199,7 +199,7 @@ test("unwrap tolerates a missing marker and missing begin", () => {
 })
 
 test("wrapCommand runs any argv with the output framed", () => {
-  const cmd = Camera.wrapCommand(["bash", "-c", "echo hi; exit 3", "x"], "sleep-mode-step")
+  const cmd = Camera.wrapCommand(["bash", "-c", "echo hi; exit 3", "x"], "get-the-f-up-step")
   const res = spawnSync(cmd[0], cmd.slice(1), { encoding: "utf8" })
   const framed = Camera.unwrap(res.stdout)
   assert.equal(framed.output, "hi\n")

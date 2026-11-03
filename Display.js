@@ -100,7 +100,7 @@ function gammaApplyCommand(percent, tries, interval) {
     "done",
     "exit 0"
   ].join("\n")
-  return ["bash", "-c", script, "sleep-mode-gamma", String(p)]
+  return ["bash", "-c", script, "get-the-f-up-gamma", String(p)]
 }
 
 function identityCommand() {

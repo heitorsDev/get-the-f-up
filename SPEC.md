@@ -1,12 +1,12 @@
-# Sleep Mode — Specification
+# Get The F Up — Specification
 
 An Omarchy plugin that turns the machine into an alarm clock instead of a computer.
 Arm it with a time and a challenge; the screen goes black with a clock, the display
 dims, and at the ring time an alarm sounds that only stops when you complete the
 challenge. You can also leave early by completing it.
 
-- **Plugin id:** `io.github.heitorsdev.sleep-mode`
-- **Repo:** `heitorsDev/omarchy-sleep-mode`
+- **Plugin id:** `io.github.heitorsdev.get-the-f-up`
+- **Repo:** `heitorsDev/get-the-f-up`
 - **License:** MIT
 - **Target:** Omarchy 4.0.4 (Quattro / Quickshell) on Hyprland
 - **Status:** Spec approved by the author. Not yet implemented.
@@ -29,7 +29,7 @@ challenge. You can also leave early by completing it.
 
 ### Non-goals for v1
 
-- No auto-arming on a nightly schedule. Sleep mode is turned on deliberately.
+- No auto-arming on a nightly schedule. Get The F Up is turned on deliberately.
 - No free "abandon" escape hatch. The only exits are **N** completed challenges or the
   crash watchdog.
 - No Waybar UI. Waybar is not installed on Omarchy 4 (see `docs/environment.md`), but
@@ -63,8 +63,8 @@ Settings.qml         # full settings (challenges, display, audio, lockdown, pale
 Challenge.js         # step types, generation, evaluation (pure)
 Steps.js             # math / string / memory / camera step generators (pure)
 Palette.js           # Claude Code palette + theme integration
-Config.js            # read/write ~/.config/omarchy/sleep-mode/config.json
-History.js           # read/write ~/.local/state/omarchy/sleep-mode/history.json
+Config.js            # read/write ~/.config/omarchy/get-the-f-up/config.json
+History.js           # read/write ~/.local/state/omarchy/get-the-f-up/history.json
 Display.js           # hyprsunset / brightness control
 Audio.js             # mpv loop, sink + volume control
 Camera.js            # ffmpeg single-frame luminance
@@ -76,7 +76,7 @@ The service registers a Quickshell `IpcHandler`:
 
 ```qml
 IpcHandler {
-  target: "sleep-mode"
+  target: "get-the-f-up"
   function status(): string { /* JSON: state, ringAt, remaining, progress */ }
   function arm(payloadJson: string): string { /* {"time":"07:30"} | {"duration":"45m"}, "challenge":"default", "reps":3 */ }
   function disarm(): string { /* rejected unless the challenge is solved */ }
@@ -381,7 +381,7 @@ Variants {
       visible: root.opened
       color: "transparent"
       exclusionMode: ExclusionMode.Ignore
-      WlrLayershell.namespace: "omarchy-sleep-mode"
+      WlrLayershell.namespace: "omarchy-get-the-f-up"
       WlrLayershell.layer: WlrLayer.Overlay
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
       anchors { top: true; bottom: true; left: true; right: true }
@@ -436,7 +436,7 @@ plugin's own config file rather than `shell.json`.
 
 ### Storage
 
-`~/.config/omarchy/sleep-mode/config.json` — the plugin's own file, outside the
+`~/.config/omarchy/get-the-f-up/config.json` — the plugin's own file, outside the
 plugin directory.
 
 **Why not the `shell.json` inline entry** (the Omarchy idiom): the read path is
@@ -452,7 +452,7 @@ copies the manifest's `barWidget` block into widget metadata and nothing ever re
 `metadata.schema`. The schema block is inert. The plugin therefore ships its own
 settings panel.
 
-Runtime state lives in `~/.local/state/omarchy/sleep-mode/history.json` (matching the
+Runtime state lives in `~/.local/state/omarchy/get-the-f-up/history.json` (matching the
 shell's own `~/.local/state/omarchy/` convention).
 
 ### Settings surface
@@ -500,7 +500,7 @@ and plays audio at real volume.
 
 ## 12. History
 
-`~/.local/state/omarchy/sleep-mode/history.json` — local only, never networked.
+`~/.local/state/omarchy/get-the-f-up/history.json` — local only, never networked.
 
 Each session records: arm time, ring time, exit time, challenges required, challenges
 completed, error count, camera demotions, and whether the exit happened before or
@@ -520,14 +520,14 @@ On exit, a brief toast summary via `omarchy-notification-send`
 The headless surface, for external bars, scripting, and testing.
 
 ```
-omarchy-shell sleep-mode status
-omarchy-shell sleep-mode arm   '{"time":"07:30","challenge":"default","reps":3}'
-omarchy-shell sleep-mode arm   '{"duration":"45m","challenge":"thorough","reps":2}'
-omarchy-shell sleep-mode open  '{}'            # open the challenge overlay
-omarchy-shell sleep-mode disarm                # rejected unless the challenge is solved
-omarchy-shell sleep-mode history
-omarchy-shell sleep-mode preview
-omarchy-shell sleep-mode dryrun
+omarchy-shell get-the-f-up status
+omarchy-shell get-the-f-up arm   '{"time":"07:30","challenge":"default","reps":3}'
+omarchy-shell get-the-f-up arm   '{"duration":"45m","challenge":"thorough","reps":2}'
+omarchy-shell get-the-f-up open  '{}'            # open the challenge overlay
+omarchy-shell get-the-f-up disarm                # rejected unless the challenge is solved
+omarchy-shell get-the-f-up history
+omarchy-shell get-the-f-up preview
+omarchy-shell get-the-f-up dryrun
 ```
 
 ---
@@ -540,7 +540,7 @@ omarchy-shell sleep-mode dryrun
 - `install.sh` is **not** a convention in Omarchy 4; `omarchy plugin add` only clones
   and validates. Any side effects must happen from `Service.qml` or a documented
   manual script.
-- Install: `omarchy plugin add https://github.com/heitorsDev/omarchy-sleep-mode.git --enable`
+- Install: `omarchy plugin add https://github.com/heitorsDev/get-the-f-up.git --enable`
 - Publish to `omarchyplugins.com` (category *Productivity*; tags `bar`, `quickshell`,
   `power-management`). Marketplace ids are permanent — the id is fixed now.
 - A root `preview.png` is required for marketplace submission.
@@ -573,7 +573,7 @@ omarchy-shell sleep-mode dryrun
 
 ## 16. Configuration reference
 
-`~/.config/omarchy/sleep-mode/config.json`. Every key has a sane default; a partial
+`~/.config/omarchy/get-the-f-up/config.json`. Every key has a sane default; a partial
 file is valid and missing keys fall back to defaults.
 
 ```jsonc

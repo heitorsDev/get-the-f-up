@@ -15,7 +15,7 @@ import "Palette.js" as Palette
 import "Steps.js" as Steps
 import "Time.js" as Time
 
-// The Sleep Mode service (SPEC.md §2).
+// The Get The F Up service (SPEC.md §2).
 //
 // Owns the state machine (idle / armed / ringing), the one-second clock, the
 // challenge engine and every side effect: display dimming, the alarm, the
@@ -33,10 +33,10 @@ Scope {
   property string omarchyPath: ""
 
   readonly property string pluginId: manifest && manifest.id
-    ? String(manifest.id) : "io.github.heitorsdev.sleep-mode"
+    ? String(manifest.id) : "io.github.heitorsdev.get-the-f-up"
   readonly property string home: Quickshell.env("HOME")
   // The plugin's own directory, resolved from this file's URL. Used to find
-  // bin/sleep-mode-restore, bin/sleep-mode-watchdog and assets/.
+  // bin/get-the-f-up-restore, bin/get-the-f-up-watchdog and assets/.
   readonly property string pluginDir: Lockdown.urlToPath(Qt.resolvedUrl("."))
   readonly property string configPath: Config.configPath(home)
   readonly property string historyPath: Config.historyPath(home)
@@ -180,7 +180,7 @@ Scope {
     root._current = root._queue.shift()
     root._stepStarted = false
     root._stepExit = 1
-    runner.command = Camera.wrapCommand(root._current.cmd, "sleep-mode-step")
+    runner.command = Camera.wrapCommand(root._current.cmd, "get-the-f-up-step")
     runner.running = true
   }
 
@@ -196,7 +196,7 @@ Scope {
       try {
         step.done(exitCode, output)
       } catch (e) {
-        console.warn("sleep-mode: step failed: " + e)
+        console.warn("get-the-f-up: step failed: " + e)
       }
     }
     root.pump()
@@ -260,7 +260,7 @@ Scope {
     var merged = Config.merge(config)
     root.config = merged
     root.run(Lockdown.writeFileCommand(root.configPath, Config.serialize(merged)), function() {
-      console.log("sleep-mode: config written")
+      console.log("get-the-f-up: config written")
     })
     return root.ok()
   }
@@ -285,7 +285,7 @@ Scope {
   // variant: "armed" (the idle sleep screen, the default) or "ringing" (the
   // alarm screen). Either way nothing is dimmed, played or locked.
   function startPreview(variant) {
-    if (root.state !== "idle") return root.fail("sleep mode is already active")
+    if (root.state !== "idle") return root.fail("Get The F Up is already active")
     root.previewVariant = variant === "ringing" ? "ringing" : "armed"
     root.previewing = true
     root.openOverlay("preview")
@@ -310,7 +310,7 @@ Scope {
   }
 
   function beginSession(payload, dry) {
-    if (root.state !== "idle") return root.fail("sleep mode is already active")
+    if (root.state !== "idle") return root.fail("Get The F Up is already active")
     if (root.previewing) root.stopPreview()
     root.stopCameraLive()
 
@@ -382,7 +382,7 @@ Scope {
       root.writeRecord()
       if (!root.config.safety || root.config.safety.watchdog !== false) {
         root.run(Lockdown.watchdogStartCommand(root.pluginDir, root.shellPid), function(exitCode) {
-          if (exitCode !== 0) console.warn("sleep-mode: the crash watchdog did not start")
+          if (exitCode !== 0) console.warn("get-the-f-up: the crash watchdog did not start")
         })
       }
       root.applyLockdown(lockdownPlan)
@@ -391,7 +391,7 @@ Scope {
     })
   }
 
-  // The restore record bin/sleep-mode-restore acts on.
+  // The restore record bin/get-the-f-up-restore acts on.
   function writeRecord() {
     if (!root._record) return
     root.run(Lockdown.writeFileCommand(root.activePath, JSON.stringify(root._record, null, 2) + "\n"))
@@ -458,7 +458,7 @@ Scope {
       var sections = Lockdown.splitSections(out)
       var picked = Audio.resolveSink(root.config.audio.sink,
         Audio.parseSinkList(sections.sinks), Audio.parseDefaultSink(sections["default"]))
-      if (picked.reason) console.warn("sleep-mode: " + picked.reason)
+      if (picked.reason) console.warn("get-the-f-up: " + picked.reason)
       var sink = picked.sink
 
       root.run(Audio.captureCommand(sink), function(code2, out2) {
@@ -503,7 +503,7 @@ Scope {
 
   // ---- the challenge --------------------------------------------------------
   function submit(input) {
-    if (root.state === "idle") return root.fail("sleep mode is not active")
+    if (root.state === "idle") return root.fail("Get The F Up is not active")
     if (!root._engine) return root.fail("no challenge is running")
     if (root.lightLocked) return root.fail("switch the room light on to unlock the challenge")
     if (root._engine.current && root._engine.current.type === "camera") {
@@ -608,7 +608,7 @@ Scope {
     onExited: function(exitCode) {
       var owner = root._liveOwner
       var wanted = root.cameraLive
-      console.log("sleep-mode: camera stream exited with " + exitCode
+      console.log("get-the-f-up: camera stream exited with " + exitCode
         + (root.cameraLiveError ? " (" + root.cameraLiveError + ")" : ""))
       root.cameraLive = false
       root.cameraFrame = ""
@@ -656,7 +656,7 @@ Scope {
         // The last of a frame's three statistics: the sample is complete.
         root.onLiveSample()
       } else {
-        if (root.cameraFrameSeq === 0) console.log("sleep-mode: camera stream first frame, luma " + stat.value)
+        if (root.cameraFrameSeq === 0) console.log("get-the-f-up: camera stream first frame, luma " + stat.value)
         root.cameraLuma = stat.value
         root.cameraLiveError = ""
         // The frame is written just after its statistics are printed.
@@ -667,7 +667,7 @@ Scope {
     }
     var code = Camera.liveErrorCode(line)
     if (code) {
-      console.log("sleep-mode: camera stream error " + code + ": " + line)
+      console.log("get-the-f-up: camera stream error " + code + ": " + line)
       root.cameraLiveError = code
     }
   }
@@ -687,7 +687,7 @@ Scope {
     root._liveOwner = owner
     root.cameraLive = true
     var dev = device || root.config.camera.device
-    console.log("sleep-mode: camera stream starting for " + owner + " on " + dev)
+    console.log("get-the-f-up: camera stream starting for " + owner + " on " + dev)
     liveProc.command = Camera.liveCommand(dev, root.runtimeDir, Camera.LIVE_FPS, cap)
     liveProc.running = true
   }
@@ -706,7 +706,7 @@ Scope {
   // The settings preview. device is optional: the panel passes the draft's,
   // so a device typed but not yet saved can be tried.
   function startCameraLive(device) {
-    if (root.state !== "idle") return root.fail("sleep mode is active")
+    if (root.state !== "idle") return root.fail("Get The F Up is active")
     if (root.cameraLive) return root.ok()
     if (cameraProc.running || root._cameraDone !== null) return root.fail("the camera is busy")
     root._openLive(device, "settings", Camera.LIVE_CAP_S)
@@ -815,7 +815,7 @@ Scope {
       root.cameraProgress = gate.progress
       root.cameraHold = gate.hold
       if (gate.released !== "") {
-        console.log("sleep-mode: light gate released (" + gate.released + ")")
+        console.log("get-the-f-up: light gate released (" + gate.released + ")")
         root.lightReleased = gate.released
         root.syncCameraWatch()
       }
@@ -886,7 +886,7 @@ Scope {
 
   // One frame for the current camera step.
   function captureCamera() {
-    if (root.state === "idle") return root.fail("sleep mode is not active")
+    if (root.state === "idle") return root.fail("Get The F Up is not active")
     var engine = root._engine
     if (!engine || !engine.current || engine.current.type !== "camera") {
       return root.fail("the current step is not a camera step")
@@ -948,7 +948,7 @@ Scope {
 
     root.enqueue([
       { cmd: Lockdown.restoreCommand(root.pluginDir), done: function(code) {
-        if (code !== 0) console.warn("sleep-mode: the restore script exited with " + code)
+        if (code !== 0) console.warn("get-the-f-up: the restore script exited with " + code)
       } },
       // After the restore, so the watchdog is never the only thing standing
       // between a crash and a dimmed screen.
@@ -961,7 +961,7 @@ Scope {
       var list = History.append(root.historyList, record)
       root.historyList = list
       root.run(Lockdown.writeFileCommand(root.historyPath, History.serialize(list)))
-      root.run(Lockdown.toastCommand("Sleep mode", History.summary(record)))
+      root.run(Lockdown.toastCommand("Get The F Up", History.summary(record)))
     }
     root.finished(record)
   }
@@ -972,7 +972,7 @@ Scope {
   function recoverPreviousSession() {
     root.run(Lockdown.existsCommand(root.activePath), function(code) {
       if (code !== 0 || root.state !== "idle") return
-      console.warn("sleep-mode: restoring the state left by a previous session")
+      console.warn("get-the-f-up: restoring the state left by a previous session")
       root.run(Lockdown.restoreCommand(root.pluginDir))
     })
   }
@@ -1018,10 +1018,10 @@ Scope {
   }
 
   // ---- the CLI target --------------------------------------------------------
-  // `omarchy-shell sleep-mode <method> [json]`
+  // `omarchy-shell get-the-f-up <method> [json]`
   IpcHandler {
     id: ipc
-    target: "sleep-mode"
+    target: "get-the-f-up"
 
     function status(): string {
       return JSON.stringify(root.statusJson())

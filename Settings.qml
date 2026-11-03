@@ -13,7 +13,7 @@ import "Palette.js" as Palette
 // Every control works on a deep copy of the live config, so Cancel is always
 // safe: the draft is thrown away and the service's config is re-read. Save
 // hands the draft to the service, which writes it to
-// ~/.config/omarchy/sleep-mode/config.json.
+// ~/.config/omarchy/get-the-f-up/config.json.
 Item {
   id: root
 
@@ -248,7 +248,7 @@ Item {
   // ---- save --------------------------------------------------------------
   function save() {
     if (!root.service || typeof root.service.saveConfig !== "function") {
-      root.setStatus("the sleep-mode service is not running", true)
+      root.setStatus("the get-the-f-up service is not running", true)
       return
     }
     var result = root.service.saveConfig(root.draft)

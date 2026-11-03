@@ -21,7 +21,7 @@ var LIVE_FPS = 3
 var LIVE_CAP_S = 600
 
 function previewDir(runtimeDir) {
-  return String(runtimeDir || "/tmp").replace(/\/+$/, "") + "/omarchy-sleep-mode"
+  return String(runtimeDir || "/tmp").replace(/\/+$/, "") + "/omarchy-get-the-f-up"
 }
 
 function previewFile(runtimeDir) {
@@ -40,7 +40,7 @@ function liveCommand(device, runtimeDir, fps, capSeconds) {
       "-vf \"fps=$fps,scale=320:-1,signalstats,metadata=print\" " +
       "-q:v 6 -f image2 -update 1 -atomic_writing 1 \"$dir/preview.jpg\""
   ].join("\n")
-  return ["bash", "-c", script, "sleep-mode-camera-live", previewDir(runtimeDir),
+  return ["bash", "-c", script, "get-the-f-up-camera-live", previewDir(runtimeDir),
     String(device || DEFAULT_DEVICE), String(fps || LIVE_FPS), String(capSeconds || LIVE_CAP_S)]
 }
 
@@ -192,11 +192,11 @@ var WRAP_SCRIPT = "echo " + BEGIN_MARKER + "; \"$@\" 2>&1; rc=$?; echo \"@@exit=
 
 // Any argv, run so that its output and exit code arrive on one stream.
 function wrapCommand(argv, name) {
-  return ["bash", "-c", WRAP_SCRIPT, name || "sleep-mode-step"].concat(argv)
+  return ["bash", "-c", WRAP_SCRIPT, name || "get-the-f-up-step"].concat(argv)
 }
 
 function captureShellCommand(device, settleFrames) {
-  return wrapCommand(captureCommand(device, settleFrames), "sleep-mode-camera")
+  return wrapCommand(captureCommand(device, settleFrames), "get-the-f-up-camera")
 }
 
 // The text after the last @@begin line, with the @@exit marker removed:
