@@ -9,8 +9,8 @@ import "Steps.js" as Steps
 
 // The arming form (SPEC §9).
 //
-// Wall clock *or* duration, the challenge preset, N complete challenges, a
-// live preview of the sleep screen and the arm button. The preset is
+// Wall clock *or* duration, the ring screen's title, the challenge preset, N
+// complete challenges, a live preview of the sleep screen and the arm button. The preset is
 // described by its pool and its difficulty, never by the literal problems,
 // so a shuffled preset does not leak its answers.
 Item {
@@ -33,6 +33,8 @@ Item {
   property string mode: "time" // "time" | "duration"
   property string timeText: ""
   property string durationText: ""
+  // The ring screen's headline; "" shows WAKE UP.
+  property string title: ""
   property string presetName: ""
   property int reps: 1
   property bool removeCamera: false
@@ -110,6 +112,7 @@ Item {
 
   readonly property var payload: {
     var p = { challenge: root.presetName, reps: root.reps }
+    if (root.title.trim() !== "") p.title = root.title.trim()
     if (root.mode === "time") p.time = root.timeText
     else p.duration = root.durationText
     if (root.removeCamera) p.removeCamera = true
@@ -225,6 +228,17 @@ Item {
         if (root.mode === "time") root.timeText = value
         else root.durationText = value
       }
+    }
+
+    LabeledField {
+      width: parent.width
+      theme: root.theme
+      label: "title"
+      hint: "the headline when the alarm rings. empty shows WAKE UP"
+      placeholder: "WAKE UP"
+      text: root.title
+      editor.maximumLength: 40
+      onEdited: function(value) { root.title = value }
     }
 
     // ---- challenge -------------------------------------------------------

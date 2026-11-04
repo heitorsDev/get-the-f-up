@@ -151,7 +151,10 @@ preset is shipped as a selectable option.
 ### Ring state
 
 At the ring time the overlay changes to the error color and the large clock is
-replaced by **WAKE UP**, drawn in the palette's error color. The relative countdown
+replaced by the alarm's **title**, drawn in the palette's error color. The title is
+set per alarm (the arming form's optional `title` field, a day alarm's title) and
+defaults to **WAKE UP** (**ALARM** for a day alarm). It is shown as typed, at most
+40 characters, and a title wider than the screen is scaled down to fit. The relative countdown
 line is replaced by elapsed-since-alarm. The clock itself keeps ticking — a clock is
 useful at 6am.
 
@@ -528,7 +531,16 @@ omarchy-shell get-the-f-up disarm                # rejected unless the challenge
 omarchy-shell get-the-f-up history
 omarchy-shell get-the-f-up preview
 omarchy-shell get-the-f-up dryrun
+
+# day alarms (§17)
+omarchy-shell get-the-f-up alarms
+omarchy-shell get-the-f-up addalarm    '{"time":"14:00","title":"standup","days":[1,2,3,4,5],"preset":"quick","reps":1}'
+omarchy-shell get-the-f-up updatealarm '{"id":"<id>","enabled":false}'
+omarchy-shell get-the-f-up removealarm <id>
+omarchy-shell get-the-f-up testalarm   <id>   # ring it now, no history entry
 ```
+
+`arm` also takes an optional `"title"`: the headline of the ring screen.
 
 ---
 
@@ -684,7 +696,53 @@ file is valid and missing keys fall back to defaults.
 
 ---
 
-## 17. Verification checklist
+## 17. Day alarms
+
+Alarms for the rest of the day, not for waking up: a meeting, a break, a reminder.
+They are managed from the popout's **alarms** tab (or the CLI) and live in
+`~/.config/omarchy/get-the-f-up/alarms.json`, apart from `config.json` so a settings
+save never races the service marking an alarm as rung. The pure logic is
+`Alarms.js`.
+
+```jsonc
+{ "version": 1, "alarms": [ {
+  "id": "a…", "title": "standup", "time": "14:00",
+  "days": [1, 2, 3, 4, 5],     // 0 = Sunday; [] = once
+  "enabled": true,
+  "preset": "",                // "" = challenge.defaultPreset
+  "reps": 1,
+  "anchorAt": 0,               // created or last edited (ms)
+  "handledAt": 0               // the last occurrence that rang or was missed (ms)
+} ] }
+```
+
+**Scheduling.** An alarm waits for its first occurrence after both `anchorAt` and
+`handledAt`, so editing an alarm never fires a time already past, and no occurrence
+is handled twice. A one-off alarm switches itself off once handled and stays in the
+list to be switched on again. Times are local wall-clock times (DST keeps 14:00 at
+14:00).
+
+**Ringing.** The service checks the alarms every tick while idle. A due alarm goes
+straight to `ringing` with `session.kind = "alarm"`: the fullscreen overlay with the
+alarm's title, the alarm sound at the configured volume, and the alarm's challenge.
+Nothing is dimmed and no lockdown toggle is applied, though the overlay still
+follows `lockdown.coverAllMonitors` and `lockdown.exclusiveKeyboard`, and idle/sleep
+is inhibited while it rings. The light gate (§4) never applies to a day alarm. The
+restore record and the watchdog work as for a sleep session, so a crash silences
+the alarm. The history entry has `"kind": "alarm"` and the title, and is left out
+of the time-asleep totals.
+
+**Missed alarms.** An occurrence that passed while the machine was suspended or the
+shell was not running still rings if it is at most an hour late. An older one is
+reported with a "Missed alarm" notification and skipped. A repeating alarm that
+missed several occurrences is handled once, for the latest.
+
+**Sleep sessions.** A day alarm that comes due during a sleep session waits until
+the session ends, and is reported missed if that is more than an hour later.
+
+---
+
+## 18. Verification checklist
 
 Before the plugin is considered done:
 
@@ -701,3 +759,7 @@ Before the plugin is considered done:
 - [ ] Idle screensaver does not fire during the mode
 - [ ] Preview has no side effects; dry run dims and plays audio as expected
 - [ ] The exit toast appears and the history file gains an entry
+- [ ] A day alarm rings at its time without dimming, shows its title, and stops only
+      when its challenge is solved
+- [ ] A day alarm missed by under an hour (suspend) rings on wake; an older one
+      shows a missed notification

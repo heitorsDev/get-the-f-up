@@ -32,7 +32,8 @@ function serialize(list) {
   return JSON.stringify(Array.isArray(list) ? list : [], null, 2) + "\n"
 }
 
-// session: the service's { armedAt, ringAt, ringingSince, preset, reps, dryRun }.
+// session: the service's { kind, title, armedAt, ringAt, ringingSince, preset,
+// reps, dryRun }. kind is "sleep" (the sleep mode) or "alarm" (a day alarm).
 // Progress comes from `challenge` (a Challenge state or view) when given,
 // otherwise from the same-named fields on `session` itself.
 function makeRecord(session, exitAt, challenge) {
@@ -42,6 +43,8 @@ function makeRecord(session, exitAt, challenge) {
   var required = num(s.reps, num(c.reps, 1))
   var completed = c.done === true ? num(c.reps, required) : num(c.rep, num(s.challengesCompleted, 0))
   return {
+    kind: s.kind === "alarm" ? "alarm" : "sleep",
+    title: typeof s.title === "string" ? s.title : "",
     armedAt: num(s.armedAt, 0),
     ringAt: ringAt,
     exitAt: exitAt,
@@ -74,15 +77,27 @@ function sleptMs(record) {
   return Math.max(0, end - num(r.armedAt, end))
 }
 
+function isAlarm(record) {
+  return !!record && record.kind === "alarm"
+}
+
+// Sleep sessions only: a day alarm is not time asleep.
 function totals(list) {
   var src = Array.isArray(list) ? list : []
+  var sessions = 0
   var slept = 0
   var early = 0
+  var alarms = 0
   for (var i = 0; i < src.length; i++) {
+    if (isAlarm(src[i])) {
+      alarms += 1
+      continue
+    }
+    sessions += 1
     slept += sleptMs(src[i])
     if (src[i] && src[i].exitedBeforeRing === true) early += 1
   }
-  return { sessions: src.length, sleptMs: slept, earlyExits: early }
+  return { sessions: sessions, sleptMs: slept, earlyExits: early, alarms: alarms }
 }
 
 function plural(n, word) {
@@ -90,10 +105,18 @@ function plural(n, word) {
 }
 
 // "Slept 6h 12m — 3 challenges, 1 error"
+// "standup: dismissed after 2m — 1 challenge, 0 errors" (a day alarm; armedAt
+// is when it started ringing)
 function summary(record) {
   var r = record || {}
-  var text = "Slept " + Time.formatDuration(sleptMs(r))
-  if (r.exitedBeforeRing === true) text += ", up before the alarm"
+  var text
+  if (isAlarm(r)) {
+    var title = typeof r.title === "string" && r.title !== "" ? r.title : "Alarm"
+    text = title + ": dismissed after " + Time.formatDuration(Math.max(0, num(r.exitAt, 0) - num(r.armedAt, 0)))
+  } else {
+    text = "Slept " + Time.formatDuration(sleptMs(r))
+    if (r.exitedBeforeRing === true) text += ", up before the alarm"
+  }
   text += " — " + plural(num(r.challengesCompleted, 0), "challenge") + ", " + plural(num(r.errors, 0), "error")
   var demotions = num(r.cameraDemotions, 0)
   if (demotions > 0) text += ", " + plural(demotions, "camera skip")
@@ -109,6 +132,7 @@ if (typeof module !== "undefined" && module.exports) {
     append: append,
     recent: recent,
     sleptMs: sleptMs,
+    isAlarm: isAlarm,
     totals: totals,
     summary: summary
   }

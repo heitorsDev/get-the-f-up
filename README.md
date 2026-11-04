@@ -25,6 +25,11 @@ challenge. You can also leave early by completing it.
 - **Locks the machine down** while active — every behavior (notifications, media,
   bar, window switching, all monitors) is individually toggleable.
 - **Restores everything** on exit: brightness, gamma, volume, mute, idle behavior.
+- **Day alarms** — scheduled alarms for the rest of your day (once, weekdays, any
+  set of days) that ring with a fullscreen title and a challenge, without the sleep
+  screen, the dimming or the lockdown. Missed by under an hour (suspend)? It rings
+  on wake.
+- **A custom title** on the ring screen for every alarm, WAKE UP by default.
 - **Test modes** — a zero-side-effect preview, and a full-fidelity dry run with an
   accelerated timer so you can see (and hear) the alarm state without waiting.
 
@@ -72,7 +77,14 @@ omarchy-shell get-the-f-up open  '{}'
 omarchy-shell get-the-f-up history
 omarchy-shell get-the-f-up preview
 omarchy-shell get-the-f-up dryrun
+
+# day alarms
+omarchy-shell get-the-f-up alarms
+omarchy-shell get-the-f-up addalarm '{"time":"14:00","title":"standup","days":[1,2,3,4,5]}'
+omarchy-shell get-the-f-up removealarm <id>
 ```
+
+`arm` takes an optional `"title"` for the ring screen's headline.
 
 `disarm` is rejected unless the challenge is done — the point of the mode is that
 the only exits are N completed challenges or the crash watchdog.
@@ -83,7 +95,7 @@ the only exits are N completed challenges or the crash watchdog.
 
 `~/.config/omarchy/get-the-f-up/config.json` — every key has a default, so a partial
 file is valid. See [`SPEC.md`](./SPEC.md#16-configuration-reference) for the full
-reference.
+reference. Day alarms are kept in `~/.config/omarchy/get-the-f-up/alarms.json`.
 
 ---
 

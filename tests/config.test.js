@@ -173,6 +173,7 @@ test('serialize round-trips with 2-space indent and trailing newline', () => {
 
 test('paths', () => {
   assert.equal(Config.configPath('/home/u'), '/home/u/.config/omarchy/get-the-f-up/config.json');
+  assert.equal(Config.alarmsPath('/home/u'), '/home/u/.config/omarchy/get-the-f-up/alarms.json');
   assert.equal(Config.stateDir('/home/u'), '/home/u/.local/state/omarchy/get-the-f-up');
   assert.equal(Config.historyPath('/home/u'), '/home/u/.local/state/omarchy/get-the-f-up/history.json');
   assert.equal(Config.activePath('/home/u'), '/home/u/.local/state/omarchy/get-the-f-up/active.json');
