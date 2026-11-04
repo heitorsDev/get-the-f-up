@@ -13,6 +13,12 @@ Rectangle {
   property bool compact: false
   property real fontSize: compact ? Style.font.caption : Style.font.bodySmall
   property string tooltip: ""
+  // Held down, an autoRepeat button fires clicked() on press and then again
+  // every repeatInterval ms; repeatCount says how many repeats so far.
+  property bool autoRepeat: false
+  property int repeatDelay: 400
+  property int repeatInterval: 60
+  property int repeatCount: 0
 
   readonly property bool hot: mouse.containsMouse
   readonly property color tone: kind === "accent" ? theme.accent
@@ -56,8 +62,33 @@ Rectangle {
     enabled: root.enabled
     acceptedButtons: Qt.LeftButton
     cursorShape: Qt.PointingHandCursor
-    onClicked: root.clicked()
+    onClicked: if (!root.autoRepeat) root.clicked()
+    onPressed: {
+      if (!root.autoRepeat) return
+      root.repeatCount = 0
+      root.clicked()
+      repeat.interval = root.repeatDelay
+      repeat.restart()
+    }
+    onReleased: repeat.stop()
+    onCanceled: repeat.stop()
   }
+
+  Timer {
+    id: repeat
+    repeat: true
+    onTriggered: {
+      if (!root.enabled || !mouse.pressed) {
+        repeat.stop()
+        return
+      }
+      root.repeatCount += 1
+      repeat.interval = root.repeatInterval
+      root.clicked()
+    }
+  }
+
+  onEnabledChanged: if (!root.enabled) repeat.stop()
 
   Theme { id: fallbackTheme }
 }
