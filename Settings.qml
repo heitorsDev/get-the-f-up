@@ -269,6 +269,25 @@ Item {
   // config is reachable.
   onServiceChanged: root.reload()
 
+  // The panel is built at shell start, before the service has read
+  // config.json (FileView loads asynchronously), so the first draft is the
+  // defaults. Follow the service's config whenever it changes, unless there
+  // are unsaved edits: otherwise the panel shows the defaults after every
+  // boot, and the next edit writes those defaults over the saved file.
+  Connections {
+    target: root.service
+    ignoreUnknownSignals: true
+    function onConfigChanged() {
+      if (root.dirty) return
+      var keep = root.selectedPreset
+      var status = root.statusText
+      var statusIsError = root.statusIsError
+      root.reload()
+      if (keep !== "" && root.presetNames.indexOf(keep) >= 0) root.selectedPreset = keep
+      root.setStatus(status, statusIsError)
+    }
+  }
+
   implicitHeight: column.implicitHeight
 
   Column {
