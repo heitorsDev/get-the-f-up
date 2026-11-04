@@ -172,6 +172,10 @@ Item {
 
   onServiceChanged: root.syncFromConfig()
 
+  // The service reads config.json asynchronously after this dialog is built,
+  // so the first sync sees the defaults. Sync again once the real config lands.
+  onConfigChanged: root.syncFromConfig()
+
   onActiveChanged: {
     if (root.active) root.maybePrecheck()
   }
