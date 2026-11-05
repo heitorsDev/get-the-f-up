@@ -1,5 +1,7 @@
 # Get The F Up
 
+![The sleep screen: a fullscreen clock with the alarm time and countdown](preview.png)
+
 An Omarchy plugin that turns your machine into an **alarm clock instead of a
 computer**.
 
