@@ -68,6 +68,13 @@ Item {
   readonly property bool exclusiveKeyboard: lockdown.exclusiveKeyboard !== false
   readonly property bool emergencyEnabled: !!(config.safety && config.safety.emergencyExit === true)
   readonly property var session: root.service ? root.service.session : null
+  // A day alarm rather than the sleep mode.
+  readonly property bool isAlarm: !previewing && session !== null && session.kind === "alarm"
+  // The ring headline: the alarm's (or the arming form's) custom title, ""
+  // for the default WAKE UP.
+  readonly property string ringTitle: previewing
+    ? (root.service && root.service.previewTitle ? String(root.service.previewTitle) : "")
+    : (session && session.title ? String(session.title) : "")
   readonly property var challengeView: root.service && root.service.challenge ? root.service.challenge : null
   readonly property string cameraStatus: root.service ? String(root.service.cameraStatus || "idle") : "idle"
   // The camera step watches the light live (see Service.syncCameraWatch).
@@ -300,7 +307,7 @@ Item {
       return
     }
     if (result.correct) {
-      root.setOutcome(result.finished ? "solved. good morning" : "step passed", "success")
+      root.setOutcome(result.finished ? (root.isAlarm ? "solved" : "solved. good morning") : "step passed", "success")
     } else {
       root.flashWrong()
       if (root.currentType === "memory") {

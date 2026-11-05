@@ -52,6 +52,8 @@ test('makeRecord: exact shape from session + engine state', () => {
   const exitAt = session.ringAt + 4 * M;
   const rec = History.makeRecord(session, exitAt, s);
   assert.deepEqual(rec, {
+    kind: 'sleep',
+    title: '',
     armedAt: T0,
     ringAt: session.ringAt,
     exitAt,
@@ -63,7 +65,7 @@ test('makeRecord: exact shape from session + engine state', () => {
     exitedBeforeRing: false,
   });
   assert.deepEqual(Object.keys(rec), [
-    'armedAt', 'ringAt', 'exitAt', 'preset', 'challengesRequired',
+    'kind', 'title', 'armedAt', 'ringAt', 'exitAt', 'preset', 'challengesRequired',
     'challengesCompleted', 'errors', 'cameraDemotions', 'exitedBeforeRing',
   ]);
   // the same works from a Challenge.view
@@ -113,9 +115,12 @@ test('totals: sessions, time slept (arm -> min(ring, exit)), early exits', () =>
     History.makeRecord(session, session.ringAt + 30 * M), // slept 6h12m, rang
     History.makeRecord({ armedAt: T0, ringAt: T0 + 8 * H, reps: 1 }, T0 + 2 * H), // early, 2h
   ];
-  assert.deepEqual(History.totals(list), { sessions: 2, sleptMs: 8 * H + 12 * M, earlyExits: 1 });
-  assert.deepEqual(History.totals([]), { sessions: 0, sleptMs: 0, earlyExits: 0 });
-  assert.deepEqual(History.totals(null), { sessions: 0, sleptMs: 0, earlyExits: 0 });
+  assert.deepEqual(History.totals(list), { sessions: 2, sleptMs: 8 * H + 12 * M, earlyExits: 1, alarms: 0 });
+  assert.deepEqual(History.totals([]), { sessions: 0, sleptMs: 0, earlyExits: 0, alarms: 0 });
+  assert.deepEqual(History.totals(null), { sessions: 0, sleptMs: 0, earlyExits: 0, alarms: 0 });
+  // a day alarm is counted apart and never adds time asleep
+  const alarm = History.makeRecord({ kind: 'alarm', title: 'standup', armedAt: T0, ringAt: T0, reps: 1 }, T0 + 2 * M);
+  assert.deepEqual(History.totals(list.concat([alarm])), { sessions: 2, sleptMs: 8 * H + 12 * M, earlyExits: 1, alarms: 1 });
 });
 
 test('summary text', () => {
@@ -129,4 +134,13 @@ test('summary text', () => {
     History.summary(Object.assign({}, rec, { exitAt: T0 + 45 * M, exitedBeforeRing: true })),
     'Slept 45m, up before the alarm — 3 challenges, 1 error',
   );
+});
+
+test('summary text for a day alarm', () => {
+  const rec = History.makeRecord({ kind: 'alarm', title: 'standup', armedAt: T0, ringAt: T0, reps: 1 }, T0 + 2 * M,
+    { done: true, reps: 1, errors: 0 });
+  assert.equal(rec.kind, 'alarm');
+  assert.equal(rec.title, 'standup');
+  assert.equal(History.summary(rec), 'standup: dismissed after 2m — 1 challenge, 0 errors');
+  assert.equal(History.summary(Object.assign({}, rec, { title: '' })), 'Alarm: dismissed after 2m — 1 challenge, 0 errors');
 });

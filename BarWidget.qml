@@ -84,9 +84,19 @@ HostUi.BarWidget {
       ? barTheme.accent
       : (root.bar ? root.bar.barForeground : Color.foreground))
 
+  readonly property var nextAlarm: root.service ? root.service.nextAlarm : null
+  readonly property string sessionTitle: root.session && root.session.title ? String(root.session.title) : ""
+
   readonly property string tooltipText: {
-    if (!root.armed && !root.ringing) return "Get The F Up"
+    if (!root.armed && !root.ringing) {
+      if (!root.nextAlarm) return "Get The F Up"
+      var a = root.nextAlarm.alarm
+      var title = a && a.title ? String(a.title) : "alarm"
+      return "Get The F Up  ·  next alarm: " + title + " at "
+        + Time.formatClock(root.nextAlarm.at, { h24: root.clock24h, seconds: false })
+    }
     var parts = []
+    if (root.sessionTitle !== "") parts.push(root.sessionTitle)
     if (root.ringAt > 0) parts.push("rings at " + Time.formatClock(root.ringAt, { h24: root.clock24h, seconds: false }))
     if (root.armed && root.ringAt > 0) {
       parts.push("in " + Time.formatCompact(Math.max(0, root.ringAt - root.now)))

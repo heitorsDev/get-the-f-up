@@ -14,7 +14,7 @@ import "ui"
 //
 // Host panel contract: `opened` (bool), `open(payloadJson)`, `close()`.
 //
-// `open()` takes a JSON payload: { "view": "arm" | "settings" | "menu" }.
+// `open()` takes a JSON payload: { "view": "arm" | "alarms" | "settings" | "menu" }.
 Item {
   id: root
 
@@ -38,6 +38,7 @@ Item {
   readonly property var theme: panelTheme
 
   readonly property var menuEntries: [
+    { key: "alarms", label: "Day alarms", hint: "alarms that skip the sleep screen" },
     { key: "settings", label: "Settings", hint: "presets, display, palette" },
     { key: "preview_armed", label: "Preview idle screen", hint: "no side effects" },
     { key: "preview_ringing", label: "Preview alarm screen", hint: "no side effects" },
@@ -49,7 +50,7 @@ Item {
     var payload = ({})
     try { payload = JSON.parse(payloadJson || "{}") || ({}) } catch (e) { payload = ({}) }
     var next = String(payload.view || root.view || "arm")
-    if (next !== "arm" && next !== "settings" && next !== "menu") next = "arm"
+    if (next !== "arm" && next !== "alarms" && next !== "settings" && next !== "menu") next = "arm"
     root.view = next
     root.confirmOpen = false
     root.opened = true
@@ -73,8 +74,13 @@ Item {
     root.confirmOpen = false
   }
 
+  readonly property var cycleOrder: ["arm", "alarms", "settings"]
+
   function cycleView(direction) {
-    root.showView(root.view === "settings" ? "arm" : "settings")
+    var i = root.cycleOrder.indexOf(root.view)
+    var step = direction < 0 ? -1 : 1
+    var n = root.cycleOrder.length
+    root.showView(root.cycleOrder[((i < 0 ? 0 : i + step) % n + n) % n])
   }
 
   function closeForPopoutSwitch() {
@@ -85,8 +91,8 @@ Item {
 
   // ---- menu actions ------------------------------------------------------
   function handleMenu(key) {
-    if (key === "settings") {
-      root.showView("settings")
+    if (key === "settings" || key === "alarms") {
+      root.showView(key)
       return
     }
     // A preview changes nothing (no dim, no sound, no lock, no camera), so it
@@ -102,8 +108,8 @@ Item {
     }
   }
 
-  function runPreview(variant) {
-    if (root.service && typeof root.service.startPreview === "function") root.service.startPreview(variant)
+  function runPreview(variant, title) {
+    if (root.service && typeof root.service.startPreview === "function") root.service.startPreview(variant, title || "")
     root.close()
   }
 
@@ -205,6 +211,14 @@ Item {
               Button {
                 theme: root.theme
                 compact: true
+                text: "alarms"
+                selected: root.view === "alarms"
+                onClicked: root.showView("alarms")
+              }
+
+              Button {
+                theme: root.theme
+                compact: true
                 text: "settings"
                 selected: root.view === "settings"
                 onClicked: root.showView("settings")
@@ -222,8 +236,17 @@ Item {
             service: root.service
             onCloseRequested: root.close()
             onArmed: root.close()
-            onPreviewRequested: function(variant) { root.runPreview(variant) }
+            // The alarm preview shows the title being typed.
+            onPreviewRequested: function(variant) { root.runPreview(variant, armDialog.title) }
             onDryRunRequested: root.askDryRun()
+          }
+
+          // ---- day alarms ------------------------------------------------
+          AlarmList {
+            width: parent.width
+            visible: root.view === "alarms"
+            theme: root.theme
+            service: root.service
           }
 
           // ---- settings --------------------------------------------------

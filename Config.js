@@ -215,6 +215,12 @@ function configPath(home) {
   return home + "/.config/omarchy/get-the-f-up/config.json"
 }
 
+// Day alarms live in their own file, so a settings save (which writes the
+// whole config) never races the service marking an alarm as rung.
+function alarmsPath(home) {
+  return home + "/.config/omarchy/get-the-f-up/alarms.json"
+}
+
 function stateDir(home) {
   return home + "/.local/state/omarchy/get-the-f-up"
 }
@@ -243,6 +249,7 @@ if (typeof module !== "undefined" && module.exports) {
     parse: parse,
     serialize: serialize,
     configPath: configPath,
+    alarmsPath: alarmsPath,
     stateDir: stateDir,
     historyPath: historyPath,
     activePath: activePath,

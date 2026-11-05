@@ -51,6 +51,7 @@ merge(partial)                   -> deep-merge partial over defaults(); arrays a
 parse(text)                      -> { config, error }  // bad/empty JSON -> defaults + error string
 serialize(config)                -> pretty JSON string (2-space indent, trailing newline)
 configPath(home)                 -> home + "/.config/omarchy/get-the-f-up/config.json"
+alarmsPath(home)                 -> home + "/.config/omarchy/get-the-f-up/alarms.json"
 stateDir(home)                   -> home + "/.local/state/omarchy/get-the-f-up"
 historyPath(home)                -> stateDir(home) + "/history.json"
 activePath(home)                 -> stateDir(home) + "/active.json"   // watchdog restore record
@@ -137,12 +138,36 @@ shuffled preset re-draws its steps for the next rep.
 ```
 parse(text)                      -> array (bad/empty -> [])
 serialize(list)                  -> JSON string
-makeRecord(session, exitAt)      -> { armedAt, ringAt, exitAt, preset, challengesRequired,
+makeRecord(session, exitAt)      -> { kind, title, armedAt, ringAt, exitAt, preset, challengesRequired,
                                       challengesCompleted, errors, cameraDemotions, exitedBeforeRing }
+                                    // kind "sleep" | "alarm" (a day alarm)
 append(list, record, max)        -> new list, oldest dropped past max (default 500)
 recent(list, n)                  -> last n, newest first
-totals(list)                     -> { sessions, sleptMs, earlyExits }
+totals(list)                     -> { sessions, sleptMs, earlyExits, alarms }  // sessions: sleep only
 summary(record)                  -> "Slept 6h 12m — 3 challenges, 1 error"
+                                    "standup: dismissed after 2m — 1 challenge, 0 errors"
+isAlarm(record)                  -> bool
+```
+
+## `Alarms.js`
+
+Day alarms (SPEC.md §17). All times are epoch ms, local wall-clock.
+
+```
+parse(text)                      -> { alarms, error }   // bare array or { version, alarms }
+serialize(alarms)                -> JSON string
+validate(fields)                 -> "" | reason
+create(fields, nowMs, makeId?)   -> alarm | null       // anchored at nowMs
+update(alarms, id, fields, nowMs)-> new list           // re-anchors, clears handledAt
+setEnabled(alarms, id, on, nowMs)-> new list
+remove(alarms, id) / find(alarms, id) / add(alarms, alarm)
+pending(alarm)                   -> next occurrence after anchorAt and handledAt, 0 if off
+check(alarms, nowMs, windowMs)   -> { ring: { id, occurrence } | null, missed: [{ id, occurrence }] }
+markHandled(alarms, id, occ)     -> new list; a one-off is switched off
+upcoming(alarms, nowMs)          -> { alarm, at } | null
+describeDays(days)               -> "once" | "weekdays" | "Mon Wed Fri" …
+displayTitle(alarm)              -> title, or "ALARM"
+normalizeTitle(text)             -> trimmed, at most TITLE_MAX (40) characters
 ```
 
 `session` is the service's `session` object (below).
@@ -185,7 +210,11 @@ real    now              epoch ms, ticks every 1000 ms (UI binds clocks to this)
 var     config           merged config (Config.merge result); replaced wholesale on change
 var     palette          Palette.resolve(config.ui, theme) token map
 var     session          null when idle, else
-                         { armedAt, ringAt, ringingSince, preset, reps, dryRun }
+                         { kind, title, armedAt, ringAt, ringingSince, preset, reps, dryRun }
+                         kind "sleep" | "alarm" (+ alarmId); title "" = WAKE UP
+string  previewTitle     the ringing preview's headline
+var     alarms           the day alarms (Alarms.parse result)
+var     nextAlarm        Alarms.upcoming(alarms, now): { alarm, at } | null
 var     challenge        Challenge.view(engineState) or null
 string  cameraPrecheck   "unknown" | "checking" | "ok" | "blocked" | "unavailable"
 string  cameraStatus     "idle" | "capturing"   (during a camera step)
@@ -197,8 +226,8 @@ string  lastError        human message of the last rejected call, "" otherwise
 ### Methods (callable from QML)
 
 ```
-arm(payload)             -> { ok, error }   payload { time | duration, challenge, reps, removeCamera? }
-startPreview()           -> { ok }          shows the overlay in preview, no side effects
+arm(payload)             -> { ok, error }   payload { time | duration, challenge, reps, title?, removeCamera? }
+startPreview(variant, title) -> { ok }      shows the overlay in preview, no side effects
 stopPreview()            -> { ok }
 startDryRun(payload)     -> { ok, error }   real dim/overlay/sound, ring after 10 s, no history
 submit(input)            -> { ok, correct, finished }
@@ -208,6 +237,11 @@ emergencyExit(confirmation) -> { ok, error } only when config.safety.emergencyEx
 saveConfig(config)       -> { ok, error }   writes config.json, updates `config`
 reloadConfig()           -> { ok }
 openOverlay()            -> { ok }          summon the overlay (shell.summon(pluginId, "{}"))
+addAlarm(fields)         -> { ok, alarm, error }   fields { title, time, days, enabled, preset, reps }
+updateAlarm(id, fields)  -> { ok, alarm, error }
+setAlarmEnabled(id, on)  -> { ok, error }
+removeAlarm(id)          -> { ok, error }
+testAlarm(id)            -> { ok, error }   ring it now as a dry run (no history)
 ```
 
 Signals: `ringing()`, `finished(record)` — the UI may use them for animation only.
@@ -216,7 +250,8 @@ Signals: `ringing()`, `finished(record)` — the UI may use them for animation o
 
 `IpcHandler { target: "get-the-f-up" }` with the SPEC.md §2 methods, each taking and
 returning JSON strings that wrap the methods above (`status`, `arm`, `disarm`,
-`open`, `history`, `preview`, `dryrun`). `disarm` succeeds only if the challenge is
+`open`, `history`, `preview`, `dryrun`, and for day alarms `alarms`, `addalarm`,
+`updatealarm`, `removealarm`, `testalarm`). `disarm` succeeds only if the challenge is
 done.
 
 ---
@@ -237,4 +272,4 @@ would turn the whole plugin into a panel). The arming dialog and settings are
 therefore popouts owned by `BarWidget.qml` (the pattern
 `~/.config/omarchy/plugins/io.github.jcarcinogen.rice-bar/BarWidget.qml` uses with
 `RicePanel.qml`), with `Panel.qml` as the popout container hosting `Dialog.qml`
-(arm) and `Settings.qml`.
+(arm), `AlarmList.qml` (day alarms) and `Settings.qml`.

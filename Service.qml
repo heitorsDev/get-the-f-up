@@ -4,6 +4,7 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import qs.Commons
 
+import "Alarms.js" as Alarms
 import "Audio.js" as Audio
 import "Camera.js" as Camera
 import "Challenge.js" as Challenge
@@ -20,7 +21,8 @@ import "Time.js" as Time
 // Owns the state machine (idle / armed / ringing), the one-second clock, the
 // challenge engine and every side effect: display dimming, the alarm, the
 // camera check, the lockdown toggles, the crash watchdog and the CLI IPC
-// target.
+// target. Also owns the day alarms (SPEC.md §17): scheduled alarms that go
+// straight to ringing, without the sleep screen, the dimming or the lockdown.
 //
 // The JS modules stay pure — they only build commands and parse output. Every
 // command that touches the machine is run through a Quickshell Process.
@@ -39,6 +41,7 @@ Scope {
   // bin/get-the-f-up-restore, bin/get-the-f-up-watchdog and assets/.
   readonly property string pluginDir: Lockdown.urlToPath(Qt.resolvedUrl("."))
   readonly property string configPath: Config.configPath(home)
+  readonly property string alarmsPath: Config.alarmsPath(home)
   readonly property string historyPath: Config.historyPath(home)
   readonly property string activePath: Config.activePath(home)
   readonly property string emergencyPhrase: Lockdown.EMERGENCY_PHRASE
@@ -51,6 +54,8 @@ Scope {
   property bool previewing: false
   // Which screen the preview shows: "armed" or "ringing".
   property string previewVariant: "armed"
+  // The headline the ringing preview shows ("" = the default WAKE UP).
+  property string previewTitle: ""
   property bool dryRun: false
   property real now: 0
   property var config: Config.defaults()
@@ -62,6 +67,12 @@ Scope {
   property var lastResult: null
   property var historyList: []
   property string lastError: ""
+  // The day alarms (Alarms.js). Nothing is checked until the file has been
+  // read once, so a slow read at startup never reports every alarm missed.
+  property var alarms: []
+  property bool _alarmsLoaded: false
+  // The soonest upcoming day alarm: { alarm, at } or null.
+  readonly property var nextAlarm: Alarms.upcoming(root.alarms, root.now)
 
   // The challenge engine state (Challenge.create) and the resolved preset.
   property var _engine: null
@@ -106,6 +117,19 @@ Scope {
     onLoaded: root.applyConfigText(text())
     onLoadFailed: root.config = Config.defaults()
     onFileChanged: configFile.reload()
+  }
+
+  FileView {
+    id: alarmsFile
+    path: root.alarmsPath
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.applyAlarmsText(text())
+    onLoadFailed: {
+      root.alarms = []
+      root._alarmsLoaded = true
+    }
+    onFileChanged: alarmsFile.reload()
   }
 
   FileView {
@@ -247,6 +271,9 @@ Scope {
         root.exitSession("the maximum duration was reached")
       }
     }
+    // A day alarm that comes due during a sleep session waits until the
+    // session is over (and is reported missed if that is too late).
+    if (root.state === "idle" && root._alarmsLoaded) root.checkAlarms(t)
   }
 
   // ---- configuration --------------------------------------------------------
@@ -270,6 +297,146 @@ Scope {
     return root.ok()
   }
 
+  // ---- day alarms -------------------------------------------------------------
+  function applyAlarmsText(raw) {
+    var parsed = Alarms.parse(raw)
+    root.alarms = parsed.alarms
+    root._alarmsLoaded = true
+    if (parsed.error) root.lastError = parsed.error
+  }
+
+  function saveAlarms(list) {
+    root.alarms = list
+    root.run(Lockdown.writeFileCommand(root.alarmsPath, Alarms.serialize(list)))
+  }
+
+  // fields: { title, time, days, enabled, preset, reps }
+  function addAlarm(fields) {
+    var error = Alarms.validate(fields)
+    if (error) return root.fail(error)
+    var alarm = Alarms.create(fields, Date.now())
+    if (!alarm) return root.fail("could not create the alarm")
+    root.saveAlarms(Alarms.add(root.alarms, alarm))
+    return root.ok({ alarm: alarm })
+  }
+
+  function updateAlarm(id, fields) {
+    var current = Alarms.find(root.alarms, String(id))
+    if (!current) return root.fail("no alarm with id \"" + id + "\"")
+    var merged = {}
+    for (var key in current) merged[key] = current[key]
+    for (var k in (fields || {})) merged[k] = fields[k]
+    var error = Alarms.validate(merged)
+    if (error) return root.fail(error)
+    root.saveAlarms(Alarms.update(root.alarms, current.id, fields || {}, Date.now()))
+    return root.ok({ alarm: Alarms.find(root.alarms, current.id) })
+  }
+
+  function setAlarmEnabled(id, enabled) {
+    if (!Alarms.find(root.alarms, String(id))) return root.fail("no alarm with id \"" + id + "\"")
+    root.saveAlarms(Alarms.setEnabled(root.alarms, String(id), enabled === true, Date.now()))
+    return root.ok()
+  }
+
+  function removeAlarm(id) {
+    if (!Alarms.find(root.alarms, String(id))) return root.fail("no alarm with id \"" + id + "\"")
+    root.saveAlarms(Alarms.remove(root.alarms, String(id)))
+    return root.ok()
+  }
+
+  // Ring the earliest due alarm; report the ones due too long ago (the
+  // machine was suspended or off) as missed. Each occurrence is marked
+  // handled before anything else happens, so it is never handled twice.
+  function checkAlarms(t) {
+    var due = Alarms.check(root.alarms, t, Alarms.LATE_WINDOW_MS)
+    if (due.ring === null && due.missed.length === 0) return
+    var list = root.alarms
+    var h24 = !(root.config.ui && root.config.ui.clock24h === false)
+    for (var i = 0; i < due.missed.length; i++) {
+      var gone = Alarms.find(list, due.missed[i].id)
+      list = Alarms.markHandled(list, due.missed[i].id, due.missed[i].occurrence)
+      if (gone) {
+        root.run(Lockdown.toastCommand("Missed alarm",
+          Alarms.displayTitle(gone) + " at " + Time.formatClock(due.missed[i].occurrence, { h24: h24, seconds: false })))
+      }
+    }
+    var ringing = due.ring ? Alarms.find(list, due.ring.id) : null
+    if (due.ring) list = Alarms.markHandled(list, due.ring.id, due.ring.occurrence)
+    root.saveAlarms(list)
+    if (ringing) root.beginAlarm(ringing, due.ring.occurrence)
+  }
+
+  // A day alarm goes straight to ringing: the alarm sound and the challenge,
+  // with no dimming and no lockdown toggles. The restore record still goes to
+  // disk first, so the watchdog can silence the alarm after a crash.
+  // dry: a test ring, marked DRY RUN on screen and left out of the history.
+  function beginAlarm(alarm, occurrence, dry) {
+    if (root.state !== "idle") return root.fail("Get The F Up is already active")
+    if (root.previewing) root.stopPreview()
+    root.stopCameraLive()
+
+    var resolved = Challenge.resolvePreset(root.config, alarm.preset ? alarm.preset : "default")
+    // A preset deleted since the alarm was set must not keep it from ringing.
+    if (!resolved) resolved = Challenge.resolvePreset(root.config, "default")
+    if (!resolved) {
+      root.run(Lockdown.toastCommand(Alarms.displayTitle(alarm), "the alarm has no challenge preset to ring with"))
+      return root.fail("no challenge preset")
+    }
+
+    var t = Date.now()
+    var reps = Math.max(1, Math.floor(Number(alarm.reps) || 1))
+    root.dryRun = dry === true
+    root._resolved = resolved
+    root._engine = Challenge.create(resolved, reps)
+    root.session = {
+      kind: "alarm",
+      alarmId: String(alarm.id),
+      title: Alarms.displayTitle(alarm),
+      armedAt: t,
+      ringAt: occurrence,
+      ringingSince: t,
+      preset: resolved.name,
+      reps: reps,
+      dryRun: dry === true
+    }
+    root.challenge = Challenge.view(root._engine)
+    root.resetGate(false)
+    root._record = Lockdown.makeRecord({ pid: root.shellPid, startedAt: t, dryRun: dry === true })
+    root.writeRecord()
+    if (!root.config.safety || root.config.safety.watchdog !== false) {
+      root.run(Lockdown.watchdogStartCommand(root.pluginDir, root.shellPid), function(exitCode) {
+        if (exitCode !== 0) console.warn("get-the-f-up: the crash watchdog did not start")
+      })
+    }
+    // Never suspend or lock while an alarm is ringing.
+    inhibitor.running = true
+    root._state = "ringing"
+    root.openOverlay("sleep")
+    root.ringing()
+    root.startAlarm()
+    return root.ok()
+  }
+
+  // Ring a day alarm right now, as a test. Its schedule is left alone.
+  function testAlarm(id) {
+    var alarm = Alarms.find(root.alarms, String(id))
+    if (!alarm) return root.fail("no alarm with id \"" + id + "\"")
+    return root.beginAlarm(alarm, Date.now(), true)
+  }
+
+  function alarmsJson() {
+    var out = []
+    for (var i = 0; i < root.alarms.length; i++) {
+      var a = root.alarms[i]
+      var copy = {}
+      for (var key in a) copy[key] = a[key]
+      copy.next = Alarms.pending(a)
+      copy.repeat = Alarms.describeDays(a.days)
+      out.push(copy)
+    }
+    return out
+  }
+
   // ---- the overlay ----------------------------------------------------------
   function openOverlay(mode) {
     if (!root.shell || typeof root.shell.summon !== "function") {
@@ -283,10 +450,12 @@ Scope {
   }
 
   // variant: "armed" (the idle sleep screen, the default) or "ringing" (the
-  // alarm screen). Either way nothing is dimmed, played or locked.
-  function startPreview(variant) {
+  // alarm screen). Either way nothing is dimmed, played or locked. title is
+  // the headline the ringing preview shows ("" = WAKE UP).
+  function startPreview(variant, title) {
     if (root.state !== "idle") return root.fail("Get The F Up is already active")
     root.previewVariant = variant === "ringing" ? "ringing" : "armed"
+    root.previewTitle = Alarms.normalizeTitle(title)
     root.previewing = true
     root.openOverlay("preview")
     return root.ok()
@@ -340,6 +509,9 @@ Scope {
     root._resolved = resolved
     root._engine = Challenge.create(resolved, reps)
     root.session = {
+      kind: "sleep",
+      // The headline of the ring screen ("" = WAKE UP).
+      title: Alarms.normalizeTitle(request.title),
       armedAt: armedAt,
       ringAt: when.ringAt,
       ringingSince: 0,
@@ -742,7 +914,9 @@ Scope {
   // it goes off. Enforced in submit(), not only in the UI. It is released for
   // the rest of the session when the camera cannot be used (a blocked lens, or
   // a stream that dies), so a broken camera never strands anyone.
+  // A day alarm is not a wake-up, so the gate never applies to one.
   readonly property bool lightGate: root.state !== "idle" && !root.previewing
+    && !(root.session && root.session.kind === "alarm")
     && root.config.camera.enabled !== false && root.config.camera.requireLight === true
   property bool lightUnlocked: false
   // "" | "blocked" | "unavailable": why the gate no longer applies.
@@ -988,6 +1162,11 @@ Scope {
       remaining: root.session ? Math.max(0, Number(root.session.ringAt) - root.now) : 0,
       preset: root.session ? String(root.session.preset) : "",
       reps: root.session ? Number(root.session.reps) : 0,
+      kind: root.session ? String(root.session.kind || "sleep") : "",
+      title: root.session ? String(root.session.title || "") : "",
+      nextAlarm: root.nextAlarm
+        ? { id: root.nextAlarm.alarm.id, title: Alarms.displayTitle(root.nextAlarm.alarm), at: root.nextAlarm.at }
+        : null,
       light: { gate: root.lightGate, unlocked: root.lightUnlocked, released: root.lightReleased },
       cameraPrecheck: root.cameraPrecheck,
       cameraStatus: root.cameraStatus,
@@ -1056,6 +1235,36 @@ Scope {
       return JSON.stringify(root.startPreview())
     }
 
+    // ---- day alarms --------------------------------------------------------
+    function alarms(): string {
+      return JSON.stringify(root.alarmsJson())
+    }
+
+    // {"time":"14:00","title":"standup","days":[1,2,3,4,5],"preset":"quick","reps":1}
+    function addalarm(payloadJson: string): string {
+      var payload = root.parsePayload(payloadJson)
+      if (payload.error) return JSON.stringify(root.fail(payload.error))
+      return JSON.stringify(root.addAlarm(payload.value))
+    }
+
+    // {"id":"...", ...any field of addalarm, or "enabled":false}
+    function updatealarm(payloadJson: string): string {
+      var payload = root.parsePayload(payloadJson)
+      if (payload.error) return JSON.stringify(root.fail(payload.error))
+      var fields = {}
+      for (var key in payload.value) if (key !== "id") fields[key] = payload.value[key]
+      return JSON.stringify(root.updateAlarm(payload.value.id, fields))
+    }
+
+    function removealarm(id: string): string {
+      return JSON.stringify(root.removeAlarm(id))
+    }
+
+    // Ring an alarm now as a test (no history entry, schedule untouched).
+    function testalarm(id: string): string {
+      return JSON.stringify(root.testAlarm(id))
+    }
+
     function previewalarm(): string {
       return JSON.stringify(root.startPreview("ringing"))
     }
@@ -1072,6 +1281,7 @@ Scope {
   Component.onCompleted: {
     root.now = Date.now()
     configFile.reload()
+    alarmsFile.reload()
     historyFile.reload()
     root.recoverPreviousSession()
   }

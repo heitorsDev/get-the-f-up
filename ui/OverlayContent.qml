@@ -43,6 +43,8 @@ Item {
     id: bigScreen
     anchors.centerIn: parent
     theme: root.theme
+    title: root.host ? root.host.ringTitle : ""
+    maxWidth: root.width - Style.space(64)
     now: root.host ? root.host.now : Date.now()
     ringAt: root.host ? root.host.ringAt : 0
     ringing: root.ringing
@@ -59,6 +61,8 @@ Item {
     anchors.horizontalCenter: parent.horizontalCenter
     theme: root.theme
     sizeScale: 0.4
+    title: bigScreen.title
+    maxWidth: bigScreen.maxWidth
     now: bigScreen.now
     ringAt: bigScreen.ringAt
     ringing: bigScreen.ringing
